@@ -1,3 +1,11 @@
+### This Fork is Focus scoped in linux
+* Fully compatible with non-Steam Windows servers; you can play on any CS 1.6 server
+* Fixed MOTD; please report any bugs
+
+
+
+
+
 # CS16Client [![Build Status](https://github.com/Velaron/cs16-client/actions/workflows/build.yml/badge.svg)](https://github.com/Velaron/cs16-client/actions) <img align="right" width="128" height="128" src="https://github.com/Velaron/cs16-client/raw/main/android/app/src/main/ic_launcher-playstore.png" alt="CS16Client" />
 Reverse-engineered Counter Strike 1.6 client, designed for mobile platforms and other officially non-supported platforms.
 
