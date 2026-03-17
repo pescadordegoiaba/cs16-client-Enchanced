@@ -6,20 +6,20 @@
 
 Play On Manjaro Arch:
 ```
-🐧 ARCH LINUX — habilitar 32-bit
-🔧 1. Ativar repositório multilib
+🐧 ARCH LINUX — Enable 32-bit
+🔧 1. Enable the multilib repository
 
-Edita:
+Edit:
 
 sudo nano /etc/pacman.conf
 
-Descomenta:
+Uncomment:
 
 [multilib]
 Include = /etc/pacman.d/mirrorlist
-🔄 2. Atualizar sistema
+🔄 2. Update the system
 sudo pacman -Syu
-📦 3. Instalar dependências 32-bit
+📦 3. Install 32-bit dependencies
 sudo pacman -S \
 lib32-mesa \
 lib32-libglvnd \
@@ -30,14 +30,14 @@ lib32-libpulse \
 lib32-zlib \
 lib32-libpng \
 lib32-libjpeg-turbo
-✅ 4. (Opcional) ferramentas úteis
+✅ 4. (Optional) Useful tools
 sudo pacman -S ldd file
-🐧 DEBIAN / UBUNTU — habilitar 32-bit
-🔧 1. Ativar arquitetura i386
+🐧 DEBIAN / UBUNTU — enable 32-bit
+🔧 1. Enable i386 architecture
 sudo dpkg --add-architecture i386
-🔄 2. Atualizar
+🔄 2. Update
 sudo apt update
-📦 3. Instalar dependências 32-bit
+📦 3. Install 32-bit dependencies
 sudo apt install -y \
 libgl1-mesa-glx:i386 \
 libgl1-mesa-dri:i386 \
@@ -48,33 +48,35 @@ libpulse0:i386 \
 zlib1g:i386 \
 libpng16-16:i386 \
 libjpeg-turbo8:i386
-✅ 4. (Opcional) ferramentas
+✅ 4. (Optional) Tools
 sudo apt install file
-🔍 COMO VER O QUE ESTÁ FALTANDO
+🔍 HOW TO CHECK WHAT'S MISSING
 
-Esse comando é obrigatório saber:
+You must know this command:
 
-ldd ./xash3d | grep "not found"
+ldd ./xash3d | grep “not found”
 
-Exemplo de saída:
+Example output:
 
 libSDL2.so.0 => not found
 libopenal.so.1 => not found
 
-👉 instala a versão 32-bit correspondente
+👉 Install the corresponding 32-bit version
 
-⚠️ ERROS COMUNS
+⚠️ COMMON ERRORS
 ❌ “No such file or directory”
 
-→ geralmente falta libc 32-bit
+→ Usually missing 32-bit libc
 
 ❌ “wrong ELF class: ELFCLASS64”
 
-→ você misturou 64-bit com binário 32-bit
+→ you mixed 64-bit with a 32-bit binary
 
-❌ crash sem erro
+❌ crash without error
 
-→ normalmente OpenGL ou driver
+→ usually OpenGL or driver
+
+Translated with DeepL.com (free version)
 ```
 
 
