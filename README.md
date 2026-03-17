@@ -75,8 +75,6 @@ libopenal.so.1 => not found
 ❌ crash without error
 
 → usually OpenGL or driver
-
-Translated with DeepL.com (free version)
 ```
 
 
