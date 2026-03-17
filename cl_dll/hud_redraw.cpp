@@ -24,6 +24,7 @@
 
 #include "draw_util.h"
 
+
 #define MAX_LOGO_FRAMES 56
 
 int grgLogoFrame[MAX_LOGO_FRAMES] = 
@@ -76,7 +77,20 @@ void CHud::Think(void)
 		m_iFOV = max( default_fov->value, 90 );
 	}
 
+    // ====================== BHOP EXTREMAMENTE FÁCIL (cl_bhop 1) ======================
+    // Segure ESPAÇO o tempo todo → bhop perfeito automático
+    // Não quebra pulo normal
+    if (cl_bhop && cl_bhop->value > 0.0f)
+    {
+        cl_entity_t *pLocal = gEngfuncs.GetLocalPlayer();
+        if (pLocal && pLocal->curstate.onground == -1)   // está NO AR
+        {
+            gEngfuncs.pfnClientCmd("-jump");   // força soltar o botão no ar
+        }
+    }
+
 }
+
 
 // Redraw
 // step through the local data,  placing the appropriate graphics & text as appropriate

@@ -968,23 +968,60 @@ int CGameStudioModelRenderer::_StudioDrawPlayer(int flags, entity_state_t *pplay
 		m_pPlayerInfo = IEngineStudio.PlayerInfo(m_nPlayerIndex);
 		m_nTopColor = m_pPlayerInfo->topcolor;
 
-		if (m_nTopColor < 0)
-			m_nTopColor = 0;
+		// ====================== WALLHACK CHAMS MODERNO (TransAdd - funciona em 2026) ======================
+		if (cl_chams && cl_chams->value > 0.0f && 
+		    m_pCurrentEntity->player && 
+		    m_pCurrentEntity->index != gEngfuncs.GetLocalPlayer()->index)
+		{
+			int originalRenderFx   = m_pCurrentEntity->curstate.renderfx;
+			int originalRenderMode = m_pCurrentEntity->curstate.rendermode;
+			int originalRenderAmt  = m_pCurrentEntity->curstate.renderamt;
+			color24 originalColor  = m_pCurrentEntity->curstate.rendercolor;
 
-		if (m_nTopColor > 360)
-			m_nTopColor = 360;
+			// PASSAGEM 1: CHAMS ATRAVÉS DA PAREDE
+			m_pCurrentEntity->curstate.renderfx   = kRenderFxNone;          // sem glow shell antigo
+			m_pCurrentEntity->curstate.rendermode = kRenderTransAdd;        // translúcido = atravessa parede
+			m_pCurrentEntity->curstate.renderamt  = 255;
+
+			// Cor por time
+			if (g_PlayerExtraInfo[m_pCurrentEntity->index].teamnumber == 1) // T
+			{
+				m_pCurrentEntity->curstate.rendercolor.r = 255;
+				m_pCurrentEntity->curstate.rendercolor.g = 50;
+				m_pCurrentEntity->curstate.rendercolor.b = 50;
+			}
+			else // CT
+			{
+				m_pCurrentEntity->curstate.rendercolor.r = 50;
+				m_pCurrentEntity->curstate.rendercolor.g = 50;
+				m_pCurrentEntity->curstate.rendercolor.b = 255;
+			}
+
+			// ====================== ATIVA IGNORE DEPTH (só nessa passagem) ======================
+			gEngfuncs.Cvar_SetValue( "cl_chams_ignore_depth", 1.0f );
+
+			StudioRenderModel(dir);   // ← ESSA PASSAGEM ATRAVESSA A PAREDE
+
+			// ====================== DESATIVA IGNORE DEPTH ======================
+			gEngfuncs.Cvar_SetValue( "cl_chams_ignore_depth", 0.0f );
+
+			// restaura
+			m_pCurrentEntity->curstate.renderfx   = originalRenderFx;
+			m_pCurrentEntity->curstate.rendermode = originalRenderMode;
+			m_pCurrentEntity->curstate.renderamt  = originalRenderAmt;
+			m_pCurrentEntity->curstate.rendercolor = originalColor;
+		}
+
+		if (m_nTopColor < 0) m_nTopColor = 0;
+		if (m_nTopColor > 360) m_nTopColor = 360;
 
 		m_nBottomColor = m_pPlayerInfo->bottomcolor;
-
-		if (m_nBottomColor < 0)
-			m_nBottomColor = 0;
-
-		if (m_nBottomColor > 360)
-			m_nBottomColor = 360;
+		if (m_nBottomColor < 0) m_nBottomColor = 0;
+		if (m_nBottomColor > 360) m_nBottomColor = 360;
 
 		IEngineStudio.StudioSetRemapColors(m_nTopColor, m_nBottomColor);
 
-		StudioRenderModel(dir);
+		StudioRenderModel(dir);   // render normal (por cima)
 		m_pPlayerInfo = NULL;
 
 		if (pplayer->weaponmodel)
@@ -1192,3 +1229,50 @@ int DLLEXPORT HUD_GetStudioModelInterface( int version, struct r_studio_interfac
 	return 1;
 }
 
+void DrawTransparentTriangles( void );
+// ====================== ESP DOT PERFEITAMENTE COLADA (centralizada na cabeça) ======================
+// ====================== ESP DOT PERFEITAMENTE COLADA E CENTRALIZADA ======================
+void CHud::DrawTransparentTriangles( void )
+{
+    if( !cl_esp || cl_esp->value <= 0.0f )
+        return;
+
+    float dotSize = cl_esp_dot_size ? cl_esp_dot_size->value : 6.0f;  // cvar de tamanho
+
+    for( int i = 1; i <= 32; i++ )
+    {
+        cl_entity_t *pEnt = gEngfuncs.GetEntityByIndex( i );
+        if( !pEnt || !pEnt->player || pEnt->index == gEngfuncs.GetLocalPlayer()->index ) continue;
+        if( g_PlayerExtraInfo[i].teamnumber == g_iTeamNumber && g_iTeamNumber != 0 ) continue;
+
+        // === POSIÇÃO EXATA DA CABEÇA (mesma do hitbox expandido) ===
+        Vector head = pEnt->origin;
+        head.z += 58.0f;                     // altura perfeita da cabeça
+
+        float screen[2];
+        if( gEngfuncs.pTriAPI->WorldToScreen( head, screen ) != 0 )
+            continue;
+
+        float x = screen[0] * m_scrinfo.iWidth;
+        float y = screen[1] * m_scrinfo.iHeight;
+
+        // === DOT VERDE CENTRALIZADO ===
+        gEngfuncs.pTriAPI->RenderMode( kRenderTransAdd );
+        gEngfuncs.pfnFillRGBA( (int)(x - dotSize/2), (int)(y - dotSize/2),
+                               (int)dotSize, (int)dotSize, 0, 255, 0, 255 );
+
+        gEngfuncs.pTriAPI->RenderMode( kRenderNormal );
+    }
+}
+
+// ====================== WRAPPER GLOBAL OBRIGATÓRIO PARA O XASH/CS16Client ======================
+// O engine do Xash3D procura essa função GLOBAL (não a da classe CHud).
+// Sem ela o ESP nunca é chamado!
+void DrawTransparentTriangles(void)
+{
+    // não desenha se HUD estiver escondido
+    if (gHUD.m_iHideHUDDisplay & HIDEHUD_ALL)
+        return;
+
+    gHUD.DrawTransparentTriangles();
+}

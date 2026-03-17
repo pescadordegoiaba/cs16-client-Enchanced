@@ -29,6 +29,10 @@
 
 extern int g_weaponselect;
 extern cl_enginefunc_t gEngfuncs;
+// AIM ASSIST BÁSICO
+extern cvar_t *cl_aim_assist;
+extern cvar_t *cl_aim_smooth;
+extern cvar_t *cl_aim_fov;
 
 // Defined in pm_math.c
 float anglemod( float a );
@@ -653,6 +657,59 @@ void DLLEXPORT CL_CreateMove ( float frametime, struct usercmd_s *cmd, int activ
 		//viewangles[ 0 ] = viewangles[ 1 ] = viewangles[ 2 ] = 0.0;
 		gEngfuncs.GetViewAngles( (float *)viewangles );
 
+		//aimbot space
+// ====================== AIM ASSIST ESTÁVEL (Puxa novamente + negativos na cabeça) ======================
+    if (cl_aim_assist && cl_aim_assist->value > 0.0f)
+    {
+        cl_entity_t *target = NULL;
+        float best_dist = 999999.0f;
+        Vector my_pos = gEngfuncs.GetLocalPlayer()->origin;
+        float head_offset = cl_aim_head_offset ? cl_aim_head_offset->value : 72.0f;
+
+        for (int i = 1; i <= 32; i++)
+        {
+            cl_entity_t *pEnt = gEngfuncs.GetEntityByIndex(i);
+            if (!pEnt || !pEnt->player || pEnt->index == gEngfuncs.GetLocalPlayer()->index) continue;
+            if (g_PlayerExtraInfo[i].teamnumber == g_iTeamNumber && g_iTeamNumber != 0) continue;
+
+            Vector head = pEnt->origin;
+            head.z += 58.0f;                    // altura fixa para seleção (sempre acha)
+
+            float dist = (head - my_pos).Length();
+            if (dist < best_dist && dist < 4096.0f)
+            {
+                best_dist = dist;
+                target = pEnt;
+            }
+        }
+
+        if (target)
+        {
+            // Mira final na cabeça com seu offset negativo
+            Vector head = target->origin;
+            head.z += head_offset;
+
+            Vector delta = head - my_pos;
+            float aim_angle[3];
+            VectorAngles(delta, aim_angle);
+
+            // FOV check final
+            float dyaw = fabs(aim_angle[1] - viewangles[1]);
+            if (dyaw > 180.0f) dyaw = 360.0f - dyaw;
+            float dpitch = fabs(aim_angle[0] - viewangles[0]);
+            float total_angle = sqrt(dyaw*dyaw + dpitch*dpitch);
+
+            if (total_angle < (cl_aim_fov ? cl_aim_fov->value : 120.0f))
+            {
+                float smooth = cl_aim_smooth ? cl_aim_smooth->value : 0.35f;
+
+                viewangles[0] = viewangles[0] * (1.0f - smooth) + aim_angle[0] * smooth;
+                viewangles[1] = viewangles[1] * (1.0f - smooth) + aim_angle[1] * smooth;
+                viewangles[2] = 0.0f;
+            }
+        }
+    }
+
 		CL_AdjustAngles ( frametime, viewangles );
 
 		memset (cmd, 0, sizeof(*cmd));
@@ -997,3 +1054,4 @@ void Input_Shutdown (void)
 	IN_Shutdown();
 	KB_Shutdown();
 }
+

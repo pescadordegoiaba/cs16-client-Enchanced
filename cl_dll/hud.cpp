@@ -45,6 +45,26 @@ cvar_t *cl_fog_g;
 cvar_t *cl_fog_b;
 cvar_t *cl_fog_density;
 
+// AIM ASSIST BÁSICO - DEFINIÇÃO DAS VARIÁVEIS (OBRIGATÓRIO!)
+cvar_t *cl_aim_assist  = nullptr;
+cvar_t *cl_aim_smooth  = nullptr;
+cvar_t *cl_aim_fov     = nullptr;
+cvar_t *cl_esp_dot_size     = nullptr;
+cvar_t *cl_esp    = nullptr;
+cvar_t *cl_chams = nullptr;
+cvar_t *cl_bhop = nullptr;
+cvar_t *cl_norecoil = nullptr;
+cvar_t *cl_nospread = nullptr;
+cvar_t *cl_noaccuracy = nullptr;  // accuracy fix extra
+cvar_t *cl_aim_head_offset = nullptr;
+//cvar_t *cl_walltrans = nullptr;   // novo cvar
+
+
+
+extern cvar_t *cl_aim_assist;
+extern cvar_t *cl_aim_smooth;
+extern cvar_t *cl_aim_fov;
+
 extern client_sprite_t *GetSpriteList(client_sprite_t *pList, const char *psz, int iRes, int iCount);
 
 // Team Colors
@@ -310,7 +330,26 @@ void CHud :: Init( void )
 	cl_weapon_sparks = CVAR_CREATE( "cl_weapon_sparks", "1", FCVAR_ARCHIVE );
 	cl_weapon_wallpuff = CVAR_CREATE( "cl_weapon_wallpuff", "1", FCVAR_ARCHIVE );
 	zoom_sens_ratio = CVAR_CREATE( "zoom_sensitivity_ratio", "1.2", 0 );
+    // AIM ASSIST BÁSICO
+    cl_aim_assist = gEngfuncs.pfnRegisterVariable("cl_aim_assist", "0", FCVAR_ARCHIVE);
+    cl_aim_smooth = gEngfuncs.pfnRegisterVariable("cl_aim_smooth", "0.35", FCVAR_ARCHIVE);
+    cl_aim_fov    = gEngfuncs.pfnRegisterVariable("cl_aim_fov", "120", FCVAR_ARCHIVE);
 
+	// ESP DOT
+    cl_esp          = gEngfuncs.pfnRegisterVariable("cl_esp",          "0", FCVAR_ARCHIVE);
+    cl_esp_dot_size = gEngfuncs.pfnRegisterVariable("cl_esp_dot_size", "6.0", FCVAR_ARCHIVE);
+
+	//bhop
+	cl_bhop = gEngfuncs.pfnRegisterVariable("cl_bhop", "0", FCVAR_ARCHIVE);
+
+	cl_norecoil   = gEngfuncs.pfnRegisterVariable("cl_norecoil",   "0", FCVAR_ARCHIVE);
+    cl_nospread   = gEngfuncs.pfnRegisterVariable("cl_nospread",   "0", FCVAR_ARCHIVE);
+    cl_noaccuracy = gEngfuncs.pfnRegisterVariable("cl_noaccuracy", "0", FCVAR_ARCHIVE);
+	cl_aim_head_offset = gEngfuncs.pfnRegisterVariable("cl_aim_head_offset", "72.0", FCVAR_ARCHIVE);
+
+	    // CHAMS / WALLHACK
+    cl_chams = gEngfuncs.pfnRegisterVariable("cl_chams", "0", FCVAR_ARCHIVE);
+	//cl_walltrans = gEngfuncs.pfnRegisterVariable("cl_walltrans", "0", FCVAR_ARCHIVE);
 	cl_charset = gEngfuncs.pfnGetCvarPointer( "cl_charset" );
 	con_charset = gEngfuncs.pfnGetCvarPointer( "con_charset" );
 
@@ -651,3 +690,4 @@ void CHud::AddHudElem(CHudBase *phudelem)
 
 	ptemp->pNext = pdl;
 }
+

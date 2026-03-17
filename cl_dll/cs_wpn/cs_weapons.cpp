@@ -329,7 +329,7 @@ void CBasePlayerWeapon::FireRemaining(int &shotsFired, float &shootTime, BOOL is
 	if (m_iClip < 0)
 	{
 		m_iClip = 0;
-		shotsFired = 3;
+		shotsFired = 4;
 		shootTime = 0;
 		return;
 	}
@@ -370,7 +370,7 @@ bool CBasePlayerWeapon::ShieldSecondaryFire(int iUpAnim, int iDownAnim)
 		m_iWeaponState &= ~WPNSTATE_SHIELD_DRAWN;
 		SendWeaponAnim(iDownAnim, UseDecrement() != FALSE);
 		strcpy(m_pPlayer->m_szAnimExtention, "shieldgun");
-		m_fMaxSpeed = 250.0f;
+		m_fMaxSpeed = 500.0f;
 		m_pPlayer->m_bShieldDrawn = false;
 	}
 	else
@@ -378,7 +378,7 @@ bool CBasePlayerWeapon::ShieldSecondaryFire(int iUpAnim, int iDownAnim)
 		m_iWeaponState |= WPNSTATE_SHIELD_DRAWN;
 		SendWeaponAnim(iUpAnim, UseDecrement() != FALSE);
 		strcpy(m_pPlayer->m_szAnimExtention, "shielded");
-		m_fMaxSpeed = 180.0f;
+		m_fMaxSpeed = 500.0f;
 		m_pPlayer->m_bShieldDrawn = true;
 	}
 
