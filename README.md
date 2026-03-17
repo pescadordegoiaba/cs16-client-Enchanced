@@ -4,6 +4,80 @@
 
 
 
+Play On Manjaro Arch:
+```
+🐧 ARCH LINUX — habilitar 32-bit
+🔧 1. Ativar repositório multilib
+
+Edita:
+
+sudo nano /etc/pacman.conf
+
+Descomenta:
+
+[multilib]
+Include = /etc/pacman.d/mirrorlist
+🔄 2. Atualizar sistema
+sudo pacman -Syu
+📦 3. Instalar dependências 32-bit
+sudo pacman -S \
+lib32-mesa \
+lib32-libglvnd \
+lib32-sdl2 \
+lib32-sdl2_image \
+lib32-openal \
+lib32-libpulse \
+lib32-zlib \
+lib32-libpng \
+lib32-libjpeg-turbo
+✅ 4. (Opcional) ferramentas úteis
+sudo pacman -S ldd file
+🐧 DEBIAN / UBUNTU — habilitar 32-bit
+🔧 1. Ativar arquitetura i386
+sudo dpkg --add-architecture i386
+🔄 2. Atualizar
+sudo apt update
+📦 3. Instalar dependências 32-bit
+sudo apt install -y \
+libgl1-mesa-glx:i386 \
+libgl1-mesa-dri:i386 \
+libsdl2-2.0-0:i386 \
+libsdl2-image-2.0-0:i386 \
+libopenal1:i386 \
+libpulse0:i386 \
+zlib1g:i386 \
+libpng16-16:i386 \
+libjpeg-turbo8:i386
+✅ 4. (Opcional) ferramentas
+sudo apt install file
+🔍 COMO VER O QUE ESTÁ FALTANDO
+
+Esse comando é obrigatório saber:
+
+ldd ./xash3d | grep "not found"
+
+Exemplo de saída:
+
+libSDL2.so.0 => not found
+libopenal.so.1 => not found
+
+👉 instala a versão 32-bit correspondente
+
+⚠️ ERROS COMUNS
+❌ “No such file or directory”
+
+→ geralmente falta libc 32-bit
+
+❌ “wrong ELF class: ELFCLASS64”
+
+→ você misturou 64-bit com binário 32-bit
+
+❌ crash sem erro
+
+→ normalmente OpenGL ou driver
+```
+
+
 
 
 # CS16Client [![Build Status](https://github.com/Velaron/cs16-client/actions/workflows/build.yml/badge.svg)](https://github.com/Velaron/cs16-client/actions) <img align="right" width="128" height="128" src="https://github.com/Velaron/cs16-client/raw/main/android/app/src/main/ic_launcher-playstore.png" alt="CS16Client" />
