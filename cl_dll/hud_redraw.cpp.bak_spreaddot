@@ -17,7 +17,6 @@
 //
 #include <math.h>
 #include "hud.h"
-#include "spread_predictor.h"
 #include "cl_util.h"
 #include "triangleapi.h"
 
@@ -168,7 +167,6 @@ int CHud :: Redraw( float flTime, int intermission )
 
 	g_accept_utf8 = !stricmp( cl_charset->string, "utf-8" );
 
-	SpreadDot_Draw( flTime );
 	return 1;
 }
 

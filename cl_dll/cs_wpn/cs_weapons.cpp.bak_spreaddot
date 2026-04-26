@@ -19,7 +19,6 @@
 #include "cl_dll.h"
 #include "cl_util.h"
 #include "hud.h"
-#include "spread_predictor.h"
 
 #include "extdll.h"
 #include "util.h"
@@ -392,39 +391,7 @@ bool CBasePlayerWeapon::ShieldSecondaryFire(int iUpAnim, int iDownAnim)
 
 void CBasePlayerWeapon::KickBack(float up_base, float lateral_base, float up_modifier, float lateral_modifier, float up_max, float lateral_max, int direction_change)
 {
-    float flKickUp;
-    float flKickLateral;
 
-    if (m_iShotsFired == 1)
-    {
-        flKickUp = up_base;
-        flKickLateral = lateral_base;
-    }
-    else
-    {
-        flKickUp = m_iShotsFired * up_modifier + up_base;
-        flKickLateral = m_iShotsFired * lateral_modifier + lateral_base;
-    }
-
-    m_pPlayer->pev->punchangle.x -= flKickUp;
-    if (up_max > 0.0f && m_pPlayer->pev->punchangle.x < -up_max)
-        m_pPlayer->pev->punchangle.x = -up_max;
-
-    if (m_iDirection == 1)
-    {
-        m_pPlayer->pev->punchangle.y += flKickLateral;
-        if (lateral_max > 0.0f && m_pPlayer->pev->punchangle.y > lateral_max)
-            m_pPlayer->pev->punchangle.y = lateral_max;
-    }
-    else
-    {
-        m_pPlayer->pev->punchangle.y -= flKickLateral;
-        if (lateral_max > 0.0f && m_pPlayer->pev->punchangle.y < -lateral_max)
-            m_pPlayer->pev->punchangle.y = -lateral_max;
-    }
-
-    if (direction_change > 0 && !RANDOM_LONG(0, direction_change))
-        m_iDirection = !m_iDirection;
 }
 
 void CBasePlayerWeapon::SetPlayerShieldAnim(void)
@@ -1503,7 +1470,6 @@ void DLLEXPORT HUD_PostRunCmd( local_state_t *from, local_state_t *to, struct us
 	g_runfuncs = runfuncs;
 
 	HUD_WeaponsPostThink( from, to, cmd, time, random_seed );
-	SpreadDot_Capture( from, to, cmd, time, random_seed );
 	to->client.fov = g_lastFOV;
 
 	if ( g_runfuncs )
