@@ -49,7 +49,6 @@
 #include "pm_shared.h"
 #include "GameStudioModelRenderer.h"
 #include "ammohistory.h"
-#include "skin_model.h"
 #ifndef min
 #define min(a,b)  (((a) < (b)) ? (a) : (b))
 #endif
@@ -465,22 +464,7 @@ BOOL CBasePlayerWeapon :: DefaultDeploy( const char *szViewModel, const char *sz
 	if ( !CanDeploy() )
 		return FALSE;
 
-	const char *skinViewModel = SkinModel_ResolveViewModel( szViewModel );
-	if( !gEngfuncs.CL_LoadModel( skinViewModel, &m_pPlayer->pev->viewmodel ))
-	{
-		if( skinViewModel != szViewModel )
-		{
-			static char s_lastSkinModelFail[256] = { 0 };
-			if( strncmp( s_lastSkinModelFail, skinViewModel, sizeof( s_lastSkinModelFail ) - 1 ) )
-			{
-				strncpy( s_lastSkinModelFail, skinViewModel, sizeof( s_lastSkinModelFail ) - 1 );
-				s_lastSkinModelFail[sizeof( s_lastSkinModelFail ) - 1] = '\0';
-				gEngfuncs.Con_Printf( "[skin_model] falha ao carregar %s, usando legacy\n", skinViewModel );
-			}
-		}
-
-		gEngfuncs.CL_LoadModel( szViewModel, &m_pPlayer->pev->viewmodel );
-	}
+	gEngfuncs.CL_LoadModel( szViewModel, &m_pPlayer->pev->viewmodel );
 
 	SendWeaponAnim( iAnim, skiplocal );
 
@@ -1528,113 +1512,5 @@ void DLLEXPORT HUD_PostRunCmd( local_state_t *from, local_state_t *to, struct us
 		g_rseq		= to->playerstate.sequence;
 		g_clang		= cmd->viewangles;
 		g_clorg		= to->playerstate.origin;
-	}
-}
-
-
-
-static const char *SkinModel_DefaultViewModelForWeaponId( int weaponId )
-{
-	switch( weaponId )
-	{
-	case WEAPON_AK47: return "models/v_ak47.mdl";
-	case WEAPON_AUG: return "models/v_aug.mdl";
-	case WEAPON_AWP: return "models/v_awp.mdl";
-	case WEAPON_C4: return "models/v_c4.mdl";
-	case WEAPON_DEAGLE: return "models/v_deagle.mdl";
-	case WEAPON_ELITE: return "models/v_elite.mdl";
-	case WEAPON_FAMAS: return "models/v_famas.mdl";
-	case WEAPON_FIVESEVEN: return "models/v_fiveseven.mdl";
-	case WEAPON_FLASHBANG: return "models/v_flashbang.mdl";
-	case WEAPON_G3SG1: return "models/v_g3sg1.mdl";
-	case WEAPON_GALIL: return "models/v_galil.mdl";
-	case WEAPON_GLOCK18: return "models/v_glock18.mdl";
-	case WEAPON_HEGRENADE: return "models/v_hegrenade.mdl";
-	case WEAPON_KNIFE: return "models/v_knife.mdl";
-	case WEAPON_M249: return "models/v_m249.mdl";
-	case WEAPON_M3: return "models/v_m3.mdl";
-	case WEAPON_M4A1: return "models/v_m4a1.mdl";
-	case WEAPON_MAC10: return "models/v_mac10.mdl";
-	case WEAPON_MP5N: return "models/v_mp5.mdl";
-	case WEAPON_P228: return "models/v_p228.mdl";
-	case WEAPON_P90: return "models/v_p90.mdl";
-	case WEAPON_SCOUT: return "models/v_scout.mdl";
-	case WEAPON_SG550: return "models/v_sg550.mdl";
-	case WEAPON_SG552: return "models/v_sg552.mdl";
-	case WEAPON_SMOKEGRENADE: return "models/v_smokegrenade.mdl";
-	case WEAPON_TMP: return "models/v_tmp.mdl";
-	case WEAPON_UMP45: return "models/v_ump45.mdl";
-	case WEAPON_USP: return "models/v_usp.mdl";
-	case WEAPON_XM1014: return "models/v_xm1014.mdl";
-	default: break;
-	}
-
-	return NULL;
-}
-
-void SkinModel_EnforceViewModel()
-{
-	if( !player.m_pActiveItem )
-		return;
-
-	CBasePlayerWeapon *weapon = (CBasePlayerWeapon *)player.m_pActiveItem;
-	const char *defaultViewModel = SkinModel_DefaultViewModelForWeaponId( weapon->m_iId );
-
-	if( !defaultViewModel )
-		return;
-
-	const char *resolvedViewModel = SkinModel_ResolveViewModel( defaultViewModel );
-
-	if( !resolvedViewModel || !resolvedViewModel[0] )
-		return;
-
-	// Sem override ativo: não toca no modelo padrão.
-	if( !strcmp( resolvedViewModel, defaultViewModel ))
-		return;
-
-	int forcedIndex = 0;
-	if( !gEngfuncs.CL_LoadModel( resolvedViewModel, &forcedIndex ) || forcedIndex <= 0 )
-		return;
-
-	// O servidor/predição pode sobrescrever player.pev->viewmodel.
-	// Reaplicamos apenas quando mudou, sem redeploy e sem resetar animação.
-	if( player.pev->viewmodel != forcedIndex )
-		player.pev->viewmodel = forcedIndex;
-
-	cl_entity_t *vm = gEngfuncs.GetViewModel();
-	if( vm )
-	{
-		if( vm->curstate.modelindex != forcedIndex )
-			vm->curstate.modelindex = forcedIndex;
-
-		if( vm->model != gEngfuncs.hudGetModelByIndex( forcedIndex ))
-			vm->model = gEngfuncs.hudGetModelByIndex( forcedIndex );
-	}
-}
-
-
-void SkinModel_ClientApplyActiveViewModel()
-{
-	if( !player.m_pActiveItem )
-		return;
-
-	CBasePlayerWeapon *weapon = (CBasePlayerWeapon *)player.m_pActiveItem;
-
-	const float oldNextAttack = player.m_flNextAttack;
-	const float oldIdle = weapon->m_flTimeWeaponIdle;
-
-	player.m_pActiveItem->Holster( 1 );
-	player.m_pActiveItem->Deploy();
-
-	player.m_flNextAttack = oldNextAttack;
-	weapon->m_flTimeWeaponIdle = oldIdle;
-
-	cl_entity_t *vm = gEngfuncs.GetViewModel();
-	if( vm )
-	{
-		vm->curstate.modelindex = player.pev->viewmodel;
-		vm->model = gEngfuncs.hudGetModelByIndex( player.pev->viewmodel );
-		vm->curstate.sequence = 0;
-		vm->curstate.frame = 0.0f;
 	}
 }

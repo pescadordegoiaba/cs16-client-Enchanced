@@ -1,11 +1,14 @@
 /***
  * Predictive spread HUD dot for CS16Client/Xash3D.
  *
- * V2 compile-fix:
- * - Do NOT include dlls/weapons.h here. That header is server/GameDLL-side
- *   and requires CBaseEntity/CSave/CRestore/USE_TYPE/EHANDLE definitions.
- * - Keep this file client-only: use entity_state_t/weapon_data_t from
- *   entity_state.h and local SP_WEAPON_* constants.
+ * V5 center-return fix:
+ * - keeps the dot cached while idle instead of recomputing a new random spread
+ *   offset every rendered frame.
+ * - by default, the random part of spread is zeroed while idle; the real
+ *   command random_seed is used only on attack edge / shot / recoil updates.
+ * - this fixes Deagle/AWP unscoped "random wandering" while still allowing
+ *   small shot flicks when a bullet is actually predicted.
+ * - kept this module client-only; do not include dlls/weapons.h here.
  *
  * Intended for offline/LAN/training builds you control.
  */
@@ -37,6 +40,10 @@
 
 #ifndef FL_DUCKING
 #define FL_DUCKING (1 << 14)
+#endif
+
+#ifndef IN_ATTACK
+#define IN_ATTACK (1 << 0)
 #endif
 
 // Local weapon ids only. Avoid including dlls/weapons.h in client-only code.
@@ -94,8 +101,14 @@ struct SpreadDotState
     Vector punchangle;
     bool valid;
     bool hasCamera;
-    int screenX;
-    int screenY;
+    bool refreshDot;
+    bool useLiveSeed;
+    bool hasCachedDot;
+    int cachedX;
+    int cachedY;
+    float cachedSpread;
+    unsigned int captureCount;
+    unsigned int drawCount;
 };
 
 static SpreadDotState g_spreadDot;
@@ -106,6 +119,9 @@ static cvar_t *cl_spreaddot_size = NULL;
 static cvar_t *cl_spreaddot_color = NULL;
 static cvar_t *cl_spreaddot_max_px = NULL;
 static cvar_t *cl_spreaddot_debug = NULL;
+static cvar_t *cl_spreaddot_fallback = NULL;
+static cvar_t *cl_spreaddot_freeze_idle = NULL;
+static cvar_t *cl_spreaddot_idle_random = NULL;
 
 static cvar_t *SP_RegisterCvar(const char *name, const char *value, int flags)
 {
@@ -185,12 +201,21 @@ static void SP_RegisterCVars()
     if (g_spreadDotCvarsReady)
         return;
 
-    cl_spreaddot        = SP_RegisterCvar("cl_spreaddot", "0", FCVAR_ARCHIVE);
-    cl_spreaddot_mode   = SP_RegisterCvar("cl_spreaddot_mode", "2", FCVAR_ARCHIVE);
-    cl_spreaddot_size   = SP_RegisterCvar("cl_spreaddot_size", "5", FCVAR_ARCHIVE);
-    cl_spreaddot_color  = SP_RegisterCvar("cl_spreaddot_color", "0 255 255 220", FCVAR_ARCHIVE);
-    cl_spreaddot_max_px = SP_RegisterCvar("cl_spreaddot_max_px", "420", FCVAR_ARCHIVE);
-    cl_spreaddot_debug  = SP_RegisterCvar("cl_spreaddot_debug", "0", FCVAR_ARCHIVE);
+    // Default ON in V3, so after rebuilding you immediately see whether the
+    // HUD draw hook is working. Set cl_spreaddot 0 in-game to disable.
+    cl_spreaddot          = SP_RegisterCvar("cl_spreaddot", "1", FCVAR_ARCHIVE);
+    cl_spreaddot_mode     = SP_RegisterCvar("cl_spreaddot_mode", "2", FCVAR_ARCHIVE);
+    cl_spreaddot_size     = SP_RegisterCvar("cl_spreaddot_size", "5", FCVAR_ARCHIVE);
+    cl_spreaddot_color    = SP_RegisterCvar("cl_spreaddot_color", "0 255 255 230", FCVAR_ARCHIVE);
+    cl_spreaddot_max_px   = SP_RegisterCvar("cl_spreaddot_max_px", "9999", FCVAR_ARCHIVE);
+    cl_spreaddot_debug       = SP_RegisterCvar("cl_spreaddot_debug", "0", FCVAR_ARCHIVE);
+    cl_spreaddot_fallback    = SP_RegisterCvar("cl_spreaddot_fallback", "1", FCVAR_ARCHIVE);
+    cl_spreaddot_freeze_idle = SP_RegisterCvar("cl_spreaddot_freeze_idle", "1", FCVAR_ARCHIVE);
+
+    // 0 = no random spread while idle, only recoil/punch. Best visual behavior.
+    // 1 = stable deterministic preview while idle.
+    // 2 = old behavior: live command random_seed every recompute.
+    cl_spreaddot_idle_random = SP_RegisterCvar("cl_spreaddot_idle_random", "0", FCVAR_ARCHIVE);
 
     g_spreadDotCvarsReady = true;
 }
@@ -206,6 +231,26 @@ static SpreadDotVec2 SP_ComputeSharedSpreadOffset(unsigned int seed, float sprea
     out.x = x * spread;
     out.y = y * spread;
     return out;
+}
+
+static unsigned int SP_MakeStableSeed(const SpreadDotState &s)
+{
+    // Small deterministic hash for a stable idle preview. It is not used as
+    // "truth" for a fired bullet; real random_seed is used for actual fire.
+    unsigned int h = 2166136261u;
+    h = (h ^ (unsigned int)s.weaponId) * 16777619u;
+    h = (h ^ (unsigned int)s.weaponState) * 16777619u;
+    h = (h ^ (unsigned int)(s.shotsFired + 31)) * 16777619u;
+    h = (h ^ (unsigned int)(s.flags + 131)) * 16777619u;
+    h = (h ^ (unsigned int)(s.fov * 10.0f)) * 16777619u;
+    return h;
+}
+
+static bool SP_PunchChangedEnough(const Vector &a, const Vector &b)
+{
+    return SP_Abs(a.x - b.x) > 0.010f ||
+           SP_Abs(a.y - b.y) > 0.010f ||
+           SP_Abs(a.z - b.z) > 0.010f;
 }
 
 static float SP_AccuracyByShots(int shots, float div, float base, float maxAcc)
@@ -414,15 +459,15 @@ static SpreadDotVec2 SP_ProjectToScreen(const SpreadDotState &s, const SpreadDot
     const float cx = ScreenWidth * 0.5f;
     const float cy = ScreenHeight * 0.5f;
     float fov = s.fov;
-    if (fov <= 1.0f)
+    if (fov <= 1.0f || fov > 179.0f)
         fov = 90.0f;
 
     const float fovX = SP_DegToRad(fov);
     const float aspect = (ScreenHeight > 0) ? ((float)ScreenWidth / (float)ScreenHeight) : 1.333333f;
     const float fovY = 2.0f * atanf(tanf(fovX * 0.5f) / aspect);
 
-    float focalX = cx / tanf(fovX * 0.5f);
-    float focalY = cy / tanf(fovY * 0.5f);
+    const float focalX = cx / tanf(fovX * 0.5f);
+    const float focalY = cy / tanf(fovY * 0.5f);
 
     out.x = cx + tangentXY.x * focalX;
     out.y = cy - tangentXY.y * focalY;
@@ -444,14 +489,72 @@ static void SP_DrawFilledDot(int cx, int cy, int radius, int r, int g, int b, in
     }
 }
 
+static void SP_ReadColor(int &r, int &g, int &b, int &a)
+{
+    r = 0;
+    g = 255;
+    b = 255;
+    a = 230;
+
+    if (cl_spreaddot_color && cl_spreaddot_color->string)
+    {
+        int rr = r, gg = g, bb = b, aa = a;
+        int read = sscanf(cl_spreaddot_color->string, "%d %d %d %d", &rr, &gg, &bb, &aa);
+        if (read >= 3)
+        {
+            r = rr;
+            g = gg;
+            b = bb;
+            a = (read >= 4) ? aa : 230;
+        }
+    }
+
+    r = (int)SP_Clamp((float)r, 0.0f, 255.0f);
+    g = (int)SP_Clamp((float)g, 0.0f, 255.0f);
+    b = (int)SP_Clamp((float)b, 0.0f, 255.0f);
+    a = (int)SP_Clamp((float)a, 0.0f, 255.0f);
+}
+
+static void SP_DrawFallbackDot(int radius)
+{
+    if (!cl_spreaddot_fallback || cl_spreaddot_fallback->value <= 0.0f)
+        return;
+    if (ScreenWidth <= 0 || ScreenHeight <= 0)
+        return;
+
+    const int cx = ScreenWidth / 2;
+    const int cy = ScreenHeight / 2;
+
+    // Orange fallback: Draw() is hooked, but Capture() has not produced a valid
+    // bullet-weapon state yet. Cyan means real predicted state.
+    SP_DrawFilledDot(cx, cy, radius + 1, 0, 0, 0, 180);
+    SP_DrawFilledDot(cx, cy, radius, 255, 128, 0, 230);
+
+    if (cl_spreaddot_debug && cl_spreaddot_debug->value > 0.0f)
+    {
+        gEngfuncs.pfnFillRGBA(cx - 8, cy, 17, 1, 255, 255, 255, 140);
+        gEngfuncs.pfnFillRGBA(cx, cy - 8, 1, 17, 255, 255, 255, 140);
+    }
+}
+
 void SpreadDot_Capture(local_state_t *from, local_state_t *to, struct usercmd_s *cmd,
                        double time, unsigned int random_seed)
 {
     SP_RegisterCVars();
+    g_spreadDot.captureCount++;
+
+    const int oldWeaponId = g_spreadDot.weaponId;
+    const int oldShotsFired = g_spreadDot.shotsFired;
+    const int oldButtons = g_spreadDot.buttons;
+    const float oldFov = g_spreadDot.fov;
+    const Vector oldPunch = g_spreadDot.punchangle;
+    const bool oldValid = g_spreadDot.valid;
 
     if (!from || !to || !cmd)
     {
         g_spreadDot.valid = false;
+        g_spreadDot.refreshDot = true;
+        g_spreadDot.hasCachedDot = false;
         return;
     }
 
@@ -461,30 +564,58 @@ void SpreadDot_Capture(local_state_t *from, local_state_t *to, struct usercmd_s 
 
     if (id <= 0 || id >= SP_MAX_WEAPONS || !SP_IsBulletWeapon(id))
     {
+        g_spreadDot.weaponId = id;
         g_spreadDot.valid = false;
+        g_spreadDot.refreshDot = true;
+        g_spreadDot.hasCachedDot = false;
         return;
     }
 
-    // Use the predicted output state when available. HUD_WeaponsPostThink writes
+    // Use predicted output state when available. HUD_WeaponsPostThink writes
     // m_iShotsFired to m_fInZoom and m_flLastFire to m_fAimedDamage.
     const weapon_data_t *wd = to->weapondata + id;
 
+    const int newShotsFired = (int)wd->m_fInZoom;
+    const int newButtons = cmd->buttons;
+    const float newFov = to->client.fov > 1.0f ? to->client.fov : from->client.fov;
+    const Vector newPunch = to->client.punchangle;
+
+    const bool attackNow = (newButtons & IN_ATTACK) != 0;
+    const bool attackWasDown = (oldButtons & IN_ATTACK) != 0;
+    const bool attackEdge = attackNow && !attackWasDown;
+    const bool weaponChanged = !oldValid || id != oldWeaponId;
+    const bool shotsChanged = oldValid && newShotsFired != oldShotsFired;
+    const bool fovChanged = oldValid && SP_Abs(newFov - oldFov) > 0.5f;
+    const bool punchChanged = oldValid && SP_PunchChangedEnough(newPunch, oldPunch);
+
     g_spreadDot.weaponId = id;
     g_spreadDot.weaponState = wd->m_iWeaponState;
-    g_spreadDot.shotsFired = (int)wd->m_fInZoom;
+    g_spreadDot.shotsFired = newShotsFired;
     g_spreadDot.clip = wd->m_iClip;
     g_spreadDot.flags = to->client.flags;
     g_spreadDot.waterlevel = to->client.waterlevel;
-    g_spreadDot.buttons = cmd->buttons;
+    g_spreadDot.buttons = newButtons;
     g_spreadDot.time = (float)time;
     g_spreadDot.lastFire = wd->m_fAimedDamage;
     g_spreadDot.nextAttack = to->client.m_flNextAttack;
     g_spreadDot.nextPrimaryAttack = wd->m_flNextPrimaryAttack;
-    g_spreadDot.fov = to->client.fov > 1.0f ? to->client.fov : from->client.fov;
+    g_spreadDot.fov = newFov;
     g_spreadDot.randomSeed = random_seed;
     g_spreadDot.velocity = to->client.velocity;
-    g_spreadDot.punchangle = to->client.punchangle;
+    g_spreadDot.punchangle = newPunch;
     g_spreadDot.valid = true;
+
+    // Do not recompute the random component every frame while idle. Recompute
+    // only when state actually changed or when a shot/attack is being predicted.
+    g_spreadDot.refreshDot = weaponChanged || fovChanged || attackEdge || shotsChanged || punchChanged;
+
+    // Use the live command seed only when a shot/attack event happens.
+    // Recoil decay changes punchangle every frame; it should move the cached dot
+    // back to center, but must not generate a new random spread point each frame.
+    g_spreadDot.useLiveSeed = attackEdge || shotsChanged;
+
+    if (weaponChanged)
+        g_spreadDot.hasCachedDot = false;
 }
 
 void SpreadDot_UpdateClientData(client_data_t *cdata, float time)
@@ -504,25 +635,64 @@ void SpreadDot_UpdateClientData(client_data_t *cdata, float time)
 void SpreadDot_Draw(float flTime)
 {
     SP_RegisterCVars();
+    g_spreadDot.drawCount++;
 
     if (!cl_spreaddot || cl_spreaddot->value <= 0.0f)
         return;
-    if (!g_spreadDot.valid)
+    if (ScreenWidth <= 0 || ScreenHeight <= 0)
         return;
-    if (!SP_IsBulletWeapon(g_spreadDot.weaponId))
+
+    int radius = cl_spreaddot_size ? (int)cl_spreaddot_size->value : 5;
+    radius = (int)SP_Clamp((float)radius, 1.0f, 20.0f);
+
+    if (!g_spreadDot.valid || !SP_IsBulletWeapon(g_spreadDot.weaponId))
+    {
+        SP_DrawFallbackDot(radius);
         return;
-    if (g_spreadDot.clip == 0)
-        return;
+    }
+
+    if (flTime > 0.0f)
+        g_spreadDot.time = flTime;
 
     int mode = cl_spreaddot_mode ? (int)cl_spreaddot_mode->value : 2;
     int simulatedShots = g_spreadDot.shotsFired;
     if (mode >= 2)
         simulatedShots++;
 
+    const int idleRandomMode = cl_spreaddot_idle_random ? (int)cl_spreaddot_idle_random->value : 0;
     float spread = SP_ComputeWeaponSpread(g_spreadDot, simulatedShots);
-    SpreadDotVec2 offset = SP_ComputeSharedSpreadOffset(g_spreadDot.randomSeed, spread);
+
+    SpreadDotVec2 offset;
+    offset.x = 0.0f;
+    offset.y = 0.0f;
+
+    if (g_spreadDot.useLiveSeed)
+    {
+        // Use the real predicted command seed only on shot/update.
+        // This gives the small fire flick without idle jitter.
+        offset = SP_ComputeSharedSpreadOffset(g_spreadDot.randomSeed, spread);
+    }
+    else if (idleRandomMode == 1)
+    {
+        // Stable preview while idle. It is intentionally not centered.
+        offset = SP_ComputeSharedSpreadOffset(SP_MakeStableSeed(g_spreadDot), spread);
+    }
+    else if (idleRandomMode >= 2)
+    {
+        // Old live-preview behavior. Useful only for debugging; causes jitter.
+        offset = SP_ComputeSharedSpreadOffset(g_spreadDot.randomSeed, spread);
+    }
+    else
+    {
+        // Default V5: while idle, do not keep or invent a random bullet offset.
+        // The dot follows punch/recoil and returns to the crosshair center.
+        offset.x = 0.0f;
+        offset.y = 0.0f;
+    }
 
     // Mode 0: spread only. Mode 1/2: spread plus current predicted punch angle.
+    // Important V5 fix: recompute the final screen position every draw.
+    // We freeze/zero the random component, not the final HUD coordinates.
     if (mode >= 1)
     {
         offset.x += tanf(SP_DegToRad(g_spreadDot.punchangle.y));
@@ -533,36 +703,28 @@ void SpreadDot_Draw(float flTime)
 
     int cx = (int)(px.x + 0.5f);
     int cy = (int)(px.y + 0.5f);
-    int screenCx = ScreenWidth / 2;
-    int screenCy = ScreenHeight / 2;
-    int maxPx = cl_spreaddot_max_px ? (int)cl_spreaddot_max_px->value : 420;
+    const int screenCx = ScreenWidth / 2;
+    const int screenCy = ScreenHeight / 2;
+
+    int maxPx = cl_spreaddot_max_px ? (int)cl_spreaddot_max_px->value : 9999;
     if (maxPx < 10)
         maxPx = 10;
 
-    if (SP_Abs((float)(cx - screenCx)) > maxPx || SP_Abs((float)(cy - screenCy)) > maxPx)
-        return;
+    if (SP_Abs((float)(cx - screenCx)) > maxPx)
+        cx = screenCx + (cx > screenCx ? maxPx : -maxPx);
+    if (SP_Abs((float)(cy - screenCy)) > maxPx)
+        cy = screenCy + (cy > screenCy ? maxPx : -maxPx);
 
-    int r = 0, g = 255, b = 255, a = 220;
-    if (cl_spreaddot_color && cl_spreaddot_color->string)
-    {
-        int read = sscanf(cl_spreaddot_color->string, "%d %d %d %d", &r, &g, &b, &a);
-        if (read < 3)
-        {
-            r = 0; g = 255; b = 255; a = 220;
-        }
-        if (read == 3)
-            a = 220;
-    }
+    g_spreadDot.cachedX = cx;
+    g_spreadDot.cachedY = cy;
+    g_spreadDot.cachedSpread = spread;
+    g_spreadDot.hasCachedDot = true;
+    g_spreadDot.refreshDot = false;
+    g_spreadDot.useLiveSeed = false;
 
-    r = (int)SP_Clamp((float)r, 0.0f, 255.0f);
-    g = (int)SP_Clamp((float)g, 0.0f, 255.0f);
-    b = (int)SP_Clamp((float)b, 0.0f, 255.0f);
-    a = (int)SP_Clamp((float)a, 0.0f, 255.0f);
+    int r, g, b, a;
+    SP_ReadColor(r, g, b, a);
 
-    int radius = cl_spreaddot_size ? (int)cl_spreaddot_size->value : 5;
-    radius = (int)SP_Clamp((float)radius, 1.0f, 20.0f);
-
-    // Small black outline, then the predictive dot.
     SP_DrawFilledDot(cx, cy, radius + 1, 0, 0, 0, a > 180 ? 180 : a);
     SP_DrawFilledDot(cx, cy, radius, r, g, b, a);
 

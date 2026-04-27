@@ -484,7 +484,6 @@ extern "C" void DLLEXPORT F(void *pv)
 
 #include "cl_dll/IGameClientExports.h"
 
-#include "skin_model.h"
 //-----------------------------------------------------------------------------
 // Purpose: Exports functions that are used by the gameUI for UI dialogs
 //-----------------------------------------------------------------------------

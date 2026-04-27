@@ -1,0 +1,13 @@
+#pragma once
+
+// Sistema local de skins/viewmodels.
+// Layout esperado:
+//   cstrike/models/mod/<weapon>/<skin>/v_<weapon>.mdl
+// Exemplo:
+//   cstrike/models/mod/ak47/WCG/v_ak47.mdl
+
+void SkinModel_RegisterCommands();
+const char *SkinModel_ResolveViewModel(const char *defaultViewModel);
+
+// Implementado em cs_weapons.cpp, porque lá existem os objetos static player/g_pWpns.
+void SkinModel_ClientApplyActiveViewModel();

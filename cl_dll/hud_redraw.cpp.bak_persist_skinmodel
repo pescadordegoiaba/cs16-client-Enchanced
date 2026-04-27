@@ -26,7 +26,6 @@
 #include "draw_util.h"
 
 
-#include "skin_model.h"
 #define MAX_LOGO_FRAMES 56
 
 int grgLogoFrame[MAX_LOGO_FRAMES] = 
@@ -170,8 +169,6 @@ int CHud :: Redraw( float flTime, int intermission )
 	g_accept_utf8 = !stricmp( cl_charset->string, "utf-8" );
 
 	SpreadDot_Draw( flTime );
-
-	SkinModel_EnforceViewModel();
 	return 1;
 }
 
