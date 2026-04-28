@@ -131,7 +131,7 @@ After that, just install the APK and run.
 | xhair_size               | 4             | 0   | -   | Crosshair size.                                                                             |
 | xhair_t                  | 0             | 0   | 1   | Enables T-shaped crosshair.                                                                 |
 | xhair_thick              | 0             | 0   | -   | Crosshair thickness.                                                                        |
-------------------------------------------------------------------------------------------------------------------------------------------------------
+
 ## COMANDS FOR FUN
 | skin_model_ak47_list     |               |     |     |                                                                                             |
 | skin_model_ak47_set      |               |     |     |                                                                                             |
