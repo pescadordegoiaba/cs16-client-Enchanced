@@ -130,15 +130,14 @@ After that, just install the APK and run.
 | xhair_pad                | 0             | 0   | -   | Border around crosshair.                                                                    |
 | xhair_size               | 4             | 0   | -   | Crosshair size.                                                                             |
 | xhair_t                  | 0             | 0   | 1   | Enables T-shaped crosshair.                                                                 |
-| xhair_thick              | 0             | 0   | -   | Crosshair thickness.                                                                        |
-
-## COMANDS FOR FUN
-| skin_model_ak47_list     |               |     |     |                                                                                             |
-| skin_model_ak47_set      |               |     |     |                                                                                             |
-| skin_model_(weapon)...   |               |     |     |                                                                                             |
-| CVar                     | Default       | Min | Max | Description                                                                                 |
-| aspect_ratio             | 1             | 0.1 | 2   | Change Aspect Ratio Without Switch Resolution                                               |
-| cl_spreaddot             | 1             | -   | -   | Active Prediction of Spread Weapon                                                          |
+| xhair_thick              | 0             | 0   | -   | Crosshair thickness.                                     
+## COMANDS FOR FUN         
+| skin_model_ak47_list     |               |     |     |                                                          
+| skin_model_ak47_set      |               |     |     |                                                          
+| skin_model_(weapon)...   |               |     |     |                                                          
+| CVar                     | Default       | Min | Max | Description                                              
+| aspect_ratio             | 1             | 0.1 | 2   | Change Aspect Ratio Without Switch Resolution            
+| cl_spreaddot             | 1             | -   | -   | Active Prediction of Spread Weapon                       
 
 
 ## Building
