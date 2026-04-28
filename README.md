@@ -180,3 +180,6 @@ cd android
 ./gradlew assembleRelease
 ```
 
+### Download Full CLient
+https://www.youtube.com/watch?v=KKHsY_p3_Co
+
