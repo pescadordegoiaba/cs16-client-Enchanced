@@ -482,9 +482,6 @@ BOOL CBasePlayerWeapon :: DefaultDeploy( const char *szViewModel, const char *sz
 		gEngfuncs.CL_LoadModel( szViewModel, &m_pPlayer->pev->viewmodel );
 	}
 
-
-	const char *skinModelActivePath = SkinModel_ResolveViewModel( szViewModel );
-	SkinModel_SetActiveViewModel( szViewModel, skinModelActivePath, m_pPlayer->pev->viewmodel );
 	SendWeaponAnim( iAnim, skiplocal );
 
 	m_pPlayer->m_flNextAttack = 0.75f;

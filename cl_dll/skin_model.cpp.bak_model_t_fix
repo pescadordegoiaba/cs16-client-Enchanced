@@ -576,7 +576,7 @@ bool SkinModel_ApplyViewModelOverride(cl_entity_t *vm)
 	if( g_SkinModelActiveViewModelIndex <= 0 || g_SkinModelActiveResolvedViewModel.empty() ) return false;
 
 	int forcedIndex = g_SkinModelActiveViewModelIndex;
-	struct model_s *forcedModel = gEngfuncs.hudGetModelByIndex( forcedIndex );
+	model_t *forcedModel = gEngfuncs.hudGetModelByIndex( forcedIndex );
 
 	if( !forcedModel )
 	{

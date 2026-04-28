@@ -1,8 +1,5 @@
 #pragma once
 
-struct cl_entity_s;
-typedef struct cl_entity_s cl_entity_t;
-
 // Sistema local de skins/viewmodels.
 // Layout esperado:
 //   cstrike/models/mod/<weapon>/<skin>/v_<weapon>.mdl
@@ -15,13 +12,3 @@ const char *SkinModel_ResolveViewModel(const char *defaultViewModel);
 // Implementado em cs_weapons.cpp, porque lá existem os objetos static player/g_pWpns.
 void SkinModel_ClientApplyActiveViewModel();
 void SkinModel_EnforceViewModel();
-
-void SkinModel_SetActiveViewModel(const char *defaultViewModel, const char *resolvedViewModel, int modelIndex);
-
-void SkinModel_ClearActiveViewModel();
-
-int SkinModel_GetActiveViewModelIndex();
-
-const char *SkinModel_GetActiveViewModelPath();
-
-bool SkinModel_ApplyViewModelOverride(cl_entity_t *vm);
