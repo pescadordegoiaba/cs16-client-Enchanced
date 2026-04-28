@@ -169,11 +169,10 @@ cmake -A Win32 -S . -B build
 cmake --build build --config Release
 cmake --install build --prefix <path-to-your-installation>
 ```
-### Linux and macOS
+### Linux
 ```shell
 cmake -S . -B build
-cmake --build build --config Release
-cmake --install build --prefix <path-to-your-installation>
+cmake --build build -j$(nproc)
 ```
 ### Android
 ```shell
