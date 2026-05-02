@@ -1,50 +1,36 @@
-/***
-*
-*	Copyright (c) 1996-2002, Valve LLC. All rights reserved.
-*	
-*	This product contains software technology licensed from Id 
-*	Software, Inc. ("Id Technology").  Id Technology (c) 1996 Id Software, Inc. 
-*	All Rights Reserved.
-*
-*   Use, distribution, and modification of this source code and/or resulting
-*   object code is restricted to non-commercial enhancements to products from
-*   Valve LLC.  All other use, distribution, or modification is prohibited
-*   without written permission from Valve LLC.
-*
-****/
-//
-// death notice
-//
-#include "hud.h"
-#include "cl_util.h"
-#include "parsemsg.h"
+#!/usr/bin/env python3
+# patch_cs16_deathnotice_exact.py
+#
+# Patch específico para o death.cpp enviado:
+#   cl_dll/death.cpp
+#
+# Uso:
+#   cd /home/gullin/claude/cs16-client-Enchanced
+#   python3 /mnt/data/patch_cs16_deathnotice_exact.py
 
-#include <string.h>
-#include <stdio.h>
-#include "draw_util.h"
+from pathlib import Path
+import re
+import shutil
+import sys
 
-float color[3];
+ROOT = Path.cwd()
+death = ROOT / "cl_dll" / "death.cpp"
 
-struct DeathNoticeItem {
-	char szKiller[MAX_PLAYER_NAME_LENGTH*2];
-	char szVictim[MAX_PLAYER_NAME_LENGTH*2];
-	int iId;	// the index number of the associated sprite
-	bool bSuicide;
-	bool bTeamKill;
-	bool bNonPlayerKill;
-	float flDisplayTime;
-	float *KillerColor;
-	float *VictimColor;
-	int iHeadShotId;
-};
+if not death.exists():
+    print("[ERRO] Não achei cl_dll/death.cpp.")
+    print("Rode da raiz do cs16-client-Enchanced:")
+    print("  cd /home/gullin/claude/cs16-client-Enchanced")
+    print("  python3 /mnt/data/patch_cs16_deathnotice_exact.py")
+    sys.exit(1)
 
-#define MAX_DEATHNOTICES	4
-static int DEATHNOTICE_DISPLAY_TIME = 6;
+src = death.read_text(encoding="utf-8", errors="replace")
+backup = death.with_suffix(".cpp.before_deathnotice_exact.bak")
+if not backup.exists():
+    shutil.copy2(death, backup)
+    print(f"[*] Backup criado: {backup}")
 
-#define DEATHNOTICE_TOP		32
-
-DeathNoticeItem rgDeathNoticeList[ MAX_DEATHNOTICES + 1 ];
-
+# 1) Helpers defensivos após rgDeathNoticeList.
+helpers = r'''
 // deathnotice_safe: valida DeathMsg vindo de servidores custom/Steam p48.
 static inline bool DN_IsValidPlayerIndex( int idx )
 {
@@ -78,71 +64,28 @@ static inline void DN_BuildIconName( char *dst, size_t dstSize, const char *weap
 	strncat( dst, DN_SafeString( weaponName ), dstSize - strlen( dst ) - 1 );
 	dst[dstSize - 1] = 0;
 }
+'''
 
+if "DN_IsValidPlayerIndex" not in src:
+    needle = "DeathNoticeItem rgDeathNoticeList[ MAX_DEATHNOTICES + 1 ];"
+    if needle not in src:
+        print("[ERRO] Não achei rgDeathNoticeList para inserir helpers.")
+        sys.exit(2)
+    src = src.replace(needle, needle + "\n" + helpers, 1)
+    print("[*] Helpers defensivos inseridos.")
+else:
+    print("[*] Helpers defensivos já estavam aplicados.")
 
-int CHudDeathNotice :: Init( void )
-{
-	gHUD.AddHudElem( this );
+# 2) Patch no Draw para não usar id de sprite inválido/headshot inválido.
+draw_old = '''			int id = (rgDeathNoticeList[i].iId == -1) ? m_HUD_d_skull : rgDeathNoticeList[i].iId;
+			x = ScreenWidth - DrawUtils::ConsoleStringLen(rgDeathNoticeList[i].szVictim) - (gHUD.GetSpriteRect(id).Width());
+			if( rgDeathNoticeList[i].iHeadShotId )
+				x -= gHUD.GetSpriteRect(m_HUD_d_headshot).Width();'''
 
-	HOOK_MESSAGE( gHUD.m_DeathNotice, DeathMsg );
-
-	hud_deathnotice_time = CVAR_CREATE( "hud_deathnotice_time", "6", FCVAR_ARCHIVE );
-	m_iFlags = 0;
-
-	return 1;
-}
-
-
-void CHudDeathNotice :: InitHUDData( void )
-{
-	memset( rgDeathNoticeList, 0, sizeof(rgDeathNoticeList) );
-}
-
-
-int CHudDeathNotice :: VidInit( void )
-{
-	m_HUD_d_skull = gHUD.GetSpriteIndex( "d_skull" );
-	m_HUD_d_headshot = gHUD.GetSpriteIndex("d_headshot");
-
-	return 1;
-}
-
-int CHudDeathNotice :: Draw( float flTime )
-{
-	int x, y, r, g, b, i;
-
-	for( i = 0; i < MAX_DEATHNOTICES; i++ )
-	{
-		if ( rgDeathNoticeList[i].iId == 0 )
-			break;  // we've gone through them all
-
-		if ( rgDeathNoticeList[i].flDisplayTime < flTime )
-		{ // display time has expired
-			// remove the current item from the list
-			memmove( &rgDeathNoticeList[i], &rgDeathNoticeList[i+1], sizeof(DeathNoticeItem) * (MAX_DEATHNOTICES - i) );
-			i--;  // continue on the next item;  stop the counter getting incremented
-			continue;
-		}
-
-		rgDeathNoticeList[i].flDisplayTime = min( rgDeathNoticeList[i].flDisplayTime, flTime + DEATHNOTICE_DISPLAY_TIME );
-
-		// Hide when scoreboard drawing. It will break triapi
-		//if ( gViewPort && gViewPort->AllowedToPrintText() )
-		//if ( !gHUD.m_iNoConsolePrint )
-		{
-			// Draw the death notice
-			if( !g_iUser1 )
-			{
-				y = YRES(DEATHNOTICE_TOP) + 2 + (20 * i);  //!!!
-			}
-			else
-			{
-				y = ScreenHeight / 5 + 2 + (20 * i);
-			}
-
-			int id = (rgDeathNoticeList[i].iId == -1) ? m_HUD_d_skull : rgDeathNoticeList[i].iId;
+draw_new = '''			int id = (rgDeathNoticeList[i].iId == -1) ? m_HUD_d_skull : rgDeathNoticeList[i].iId;
 			if( id < 0 )
 			{
+				// deathnotice_safe: sem sprite válido, remove o item em vez de crashar.
 				memmove( &rgDeathNoticeList[i], &rgDeathNoticeList[i+1], sizeof(DeathNoticeItem) * (MAX_DEATHNOTICES - i) );
 				i--;
 				continue;
@@ -150,54 +93,28 @@ int CHudDeathNotice :: Draw( float flTime )
 
 			x = ScreenWidth - DrawUtils::ConsoleStringLen(rgDeathNoticeList[i].szVictim) - (gHUD.GetSpriteRect(id).Width());
 			if( rgDeathNoticeList[i].iHeadShotId && m_HUD_d_headshot >= 0 )
-				x -= gHUD.GetSpriteRect(m_HUD_d_headshot).Width();
+				x -= gHUD.GetSpriteRect(m_HUD_d_headshot).Width();'''
 
-			if ( !rgDeathNoticeList[i].bSuicide )
-			{
-				x -= (5 + DrawUtils::ConsoleStringLen( rgDeathNoticeList[i].szKiller ) );
+if "deathnotice_safe: sem sprite válido" not in src:
+    if draw_old not in src:
+        print("[AVISO] Bloco Draw/id exato não encontrado; pulando patch de Draw inicial.")
+    else:
+        src = src.replace(draw_old, draw_new, 1)
+        print("[*] Draw: validação de id de sprite aplicada.")
+else:
+    print("[*] Draw: validação de id de sprite já aplicada.")
 
-				// Draw killers name
-				if ( rgDeathNoticeList[i].KillerColor )
-					DrawUtils::SetConsoleTextColor( rgDeathNoticeList[i].KillerColor[0], rgDeathNoticeList[i].KillerColor[1], rgDeathNoticeList[i].KillerColor[2] );
-				x = 5 + DrawUtils::DrawConsoleString( x, y, rgDeathNoticeList[i].szKiller );
-			}
+src = src.replace(
+    "if( rgDeathNoticeList[i].iHeadShotId)\n\t\t\t{",
+    "if( rgDeathNoticeList[i].iHeadShotId && m_HUD_d_headshot >= 0 )\n\t\t\t{"
+)
+src = src.replace(
+    "if( rgDeathNoticeList[i].iHeadShotId)\r\n\t\t\t{",
+    "if( rgDeathNoticeList[i].iHeadShotId && m_HUD_d_headshot >= 0 )\r\n\t\t\t{"
+)
 
-			r = 255;  g = 80;	b = 0;
-			if ( rgDeathNoticeList[i].bTeamKill )
-			{
-				r = 10;	g = 240; b = 10;  // display it in sickly green
-			}
-
-			// Draw death weapon
-			SPR_Set( gHUD.GetSprite(id), r, g, b );
-			SPR_DrawAdditive( 0, x, y, &gHUD.GetSpriteRect(id) );
-
-			x += (gHUD.GetSpriteRect(id).Width());
-
-			if( rgDeathNoticeList[i].iHeadShotId && m_HUD_d_headshot >= 0 )
-			{
-				SPR_Set( gHUD.GetSprite(m_HUD_d_headshot), r, g, b );
-				SPR_DrawAdditive( 0, x, y, &gHUD.GetSpriteRect(m_HUD_d_headshot));
-				x += (gHUD.GetSpriteRect(m_HUD_d_headshot).Width());
-			}
-
-			// Draw victims name (if it was a player that was killed)
-			if (!rgDeathNoticeList[i].bNonPlayerKill)
-			{
-				if ( rgDeathNoticeList[i].VictimColor )
-					DrawUtils::SetConsoleTextColor( rgDeathNoticeList[i].VictimColor[0], rgDeathNoticeList[i].VictimColor[1], rgDeathNoticeList[i].VictimColor[2] );
-				x = DrawUtils::DrawConsoleString( x, y, rgDeathNoticeList[i].szVictim );
-			}
-		}
-	}
-
-	if( i == 0 )
-		m_iFlags &= ~HUD_DRAW; // disable hud item
-
-	return 1;
-}
-
-// This message handler may be better off elsewhere
+# 3) Substitui a função MsgFunc_DeathMsg inteira por versão segura.
+safe_func = r'''// This message handler may be better off elsewhere
 int CHudDeathNotice :: MsgFunc_DeathMsg( const char *pszName, int iSize, void *pbuf )
 {
 	m_iFlags |= HUD_DRAW;
@@ -216,7 +133,13 @@ int CHudDeathNotice :: MsgFunc_DeathMsg( const char *pszName, int iSize, void *p
 	char killedwith[64];
 	DN_BuildIconName( killedwith, sizeof( killedwith ), reader.ReadString() );
 
-	// Evita passar 255/-1 ou indices fora de MAX_PLAYERS para HUD/scoreboard.
+	if( killer != rawKiller || (!victimIsNonPlayer && victim != rawVictim) )
+	{
+		Con_DPrintf( "DeathMsg: indices fora do intervalo rawKiller=%d rawVictim=%d -> killer=%d victim=%d\n",
+			rawKiller, rawVictim, killer, victimForHud );
+	}
+
+	// Evita passar 255/-1 ou índices > MAX_PLAYERS para HUD/scoreboard.
 	gHUD.m_Scoreboard.DeathMsg( killer, victimForHud );
 	gHUD.m_Spectator.DeathMessage( victimForHud );
 
@@ -232,7 +155,7 @@ int CHudDeathNotice :: MsgFunc_DeathMsg( const char *pszName, int iSize, void *p
 		i = MAX_DEATHNOTICES - 1;
 	}
 
-	// Limpa flags/ponteiros antigos do slot reaproveitado.
+	// Limpa flags antigas do slot reaproveitado.
 	memset( &rgDeathNoticeList[i], 0, sizeof( rgDeathNoticeList[i] ) );
 
 	gHUD.m_Scoreboard.GetAllPlayersInfo();
@@ -286,17 +209,21 @@ int CHudDeathNotice :: MsgFunc_DeathMsg( const char *pszName, int iSize, void *p
 			rgDeathNoticeList[i].bTeamKill = true;
 	}
 
-	rgDeathNoticeList[i].iHeadShotId = ( headshot != 0 && m_HUD_d_headshot >= 0 ) ? 1 : 0;
+	rgDeathNoticeList[i].iHeadShotId = (headshot != 0 && m_HUD_d_headshot >= 0) ? 1 : 0;
 
 	// Find the sprite in the list
 	int spr = gHUD.GetSpriteIndex( killedwith );
 
 	if( spr < 0 )
+	{
+		Con_DPrintf( "DeathMsg: sprite '%s' não encontrado; usando d_skull/fallback.\n", killedwith );
 		spr = m_HUD_d_skull;
+	}
 
 	if( spr < 0 )
 	{
-		// Sem sprite algum: nao tenta desenhar para evitar crash.
+		// Sem sprite algum: registra no console, mas não tenta desenhar.
+		Con_DPrintf( "DeathMsg: nenhum sprite de fallback disponível; death notice ignorado.\n" );
 		return 1;
 	}
 
@@ -357,5 +284,27 @@ int CHudDeathNotice :: MsgFunc_DeathMsg( const char *pszName, int iSize, void *p
 
 	return 1;
 }
+'''
 
+pattern = r'// This message handler may be better off elsewhere\s*int CHudDeathNotice\s*::\s*MsgFunc_DeathMsg\s*\(\s*const char \*pszName,\s*int iSize,\s*void \*pbuf\s*\)\s*\{.*?\n\}'
+new_src, n = re.subn(pattern, safe_func, src, count=1, flags=re.S)
+if n != 1:
+    print("[ERRO] Não consegui substituir MsgFunc_DeathMsg. O death.cpp está diferente do esperado.")
+    print("Dica: mande também o arquivo atual completo depois dos patches, se houver.")
+    sys.exit(3)
 
+src = new_src
+death.write_text(src, encoding="utf-8")
+
+print("[OK] cl_dll/death.cpp patchado com segurança para DeathMsg.")
+print()
+print("Agora compile:")
+print("  cd", ROOT)
+print("  ./build_cs16_32_i386.sh clean")
+print("  ./build_cs16_32_i386.sh")
+print()
+print("Ache o client.so:")
+print("  find build -name client.so -print")
+print()
+print("Copie para o jogo, ajustando o caminho conforme o find:")
+print("  cp -f build/cl_dll/client.so /home/gullin/Games/xash3d-fwgs-linux-i386/cstrike/cl_dlls/client.so")
