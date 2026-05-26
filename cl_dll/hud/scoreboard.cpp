@@ -186,7 +186,7 @@ int CHudScoreboard :: Draw( float flTime )
 int CHudScoreboard :: DrawScoreboard( float fTime )
 {
 	GetAllPlayersInfo();
-	char ServerName[90];
+	char ServerName[128];
 
 //	Packetloss removed on Kelly 'shipping nazi' Bailey's orders
 //	if ( cl_showpacketloss && cl_showpacketloss->value && ( ScreenWidth >= 400 ) )
@@ -220,9 +220,10 @@ int CHudScoreboard :: DrawScoreboard( float fTime )
 
 	if( gHUD.m_szServerName[0] )
 		// snprintf( ServerName, 80, "%s", (char*)(gHUD.m_Teamplay ? "TEAMS" : "PLAYERS"), gHUD.m_szServerName );
-		strncpy( ServerName, gHUD.m_szServerName, 80 );
+		strncpy( ServerName, gHUD.m_szServerName, sizeof( ServerName ) );
 	else
-		strncpy( ServerName, gHUD.m_Teamplay ? "TEAMS" : "PLAYERS", 80 );
+		strncpy( ServerName, gHUD.m_Teamplay ? "TEAMS" : "PLAYERS", sizeof( ServerName ) );
+	ServerName[sizeof( ServerName ) - 1] = 0;
 
 	DrawUtils::DrawHudString( g_Columns[COL_NAME].start, ypos, g_Columns[COL_NAME].end, ServerName, 255, 140, 0 );
 	DrawUtils::DrawHudStringReverse( g_Columns[COL_HP].start, ypos, g_Columns[COL_HP].end, g_Columns[COL_HP].name, 255, 140, 0 );

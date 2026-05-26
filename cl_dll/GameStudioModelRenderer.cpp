@@ -26,6 +26,11 @@
 #include "dlight.h"
 #include "triangleapi.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+#include <GL/gl.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <memory.h>
@@ -40,6 +45,13 @@
 #include "camera.h"
 #include "eventscripts.h"
 
+// Note: do not undef max/min here — this file still uses old bare min() in several places.
+
+extern cvar_t *cl_player_outline;  // clean visibility silhouette - only on visible player models (respects walls/depth)
+extern cvar_t *cl_hitbox_outline;   // hitbox wireframe outlines for visible players (clean aiming reference)
+extern cvar_t *cl_hitbox_outline_head_only; // only head hitbox (much cleaner, recommended)
+extern cvar_t *cl_hitbox_outline_max_dist;   // max distance for hitbox drawing (perf)
+
 #define ANIM_WALK_SEQUENCE 3
 #define ANIM_JUMP_SEQUENCE 6
 #define ANIM_SWIM_1 8
@@ -48,6 +60,7 @@
 #define ANIM_LAST_DEATH_SEQUENCE 159
 #define ANIM_FIRST_EMOTION_SEQUENCE 198
 #define ANIM_LAST_EMOTION_SEQUENCE 207
+#define STUDIO_HITGROUP_HEAD 1
 
 CGameStudioModelRenderer g_StudioRenderer;
 
@@ -76,6 +89,22 @@ engine_studio_api_t IEngineStudio;
 
 static client_anim_state_t g_state;
 static client_anim_state_t g_clientstate;
+
+static void DrawStudioHitboxEdges( Vector corners[8] )
+{
+	gEngfuncs.pTriAPI->Vertex3fv( corners[0] ); gEngfuncs.pTriAPI->Vertex3fv( corners[1] );
+	gEngfuncs.pTriAPI->Vertex3fv( corners[1] ); gEngfuncs.pTriAPI->Vertex3fv( corners[2] );
+	gEngfuncs.pTriAPI->Vertex3fv( corners[2] ); gEngfuncs.pTriAPI->Vertex3fv( corners[3] );
+	gEngfuncs.pTriAPI->Vertex3fv( corners[3] ); gEngfuncs.pTriAPI->Vertex3fv( corners[0] );
+	gEngfuncs.pTriAPI->Vertex3fv( corners[4] ); gEngfuncs.pTriAPI->Vertex3fv( corners[5] );
+	gEngfuncs.pTriAPI->Vertex3fv( corners[5] ); gEngfuncs.pTriAPI->Vertex3fv( corners[6] );
+	gEngfuncs.pTriAPI->Vertex3fv( corners[6] ); gEngfuncs.pTriAPI->Vertex3fv( corners[7] );
+	gEngfuncs.pTriAPI->Vertex3fv( corners[7] ); gEngfuncs.pTriAPI->Vertex3fv( corners[4] );
+	gEngfuncs.pTriAPI->Vertex3fv( corners[0] ); gEngfuncs.pTriAPI->Vertex3fv( corners[4] );
+	gEngfuncs.pTriAPI->Vertex3fv( corners[1] ); gEngfuncs.pTriAPI->Vertex3fv( corners[5] );
+	gEngfuncs.pTriAPI->Vertex3fv( corners[2] ); gEngfuncs.pTriAPI->Vertex3fv( corners[6] );
+	gEngfuncs.pTriAPI->Vertex3fv( corners[3] ); gEngfuncs.pTriAPI->Vertex3fv( corners[7] );
+}
 
 CGameStudioModelRenderer::CGameStudioModelRenderer(void)
 {
@@ -968,60 +997,168 @@ int CGameStudioModelRenderer::_StudioDrawPlayer(int flags, entity_state_t *pplay
 		m_pPlayerInfo = IEngineStudio.PlayerInfo(m_nPlayerIndex);
 		m_nTopColor = m_pPlayerInfo->topcolor;
 
-		// ====================== WALLHACK CHAMS MODERNO (TransAdd - funciona em 2026) ======================
-		if (cl_chams && cl_chams->value > 0.0f && 
-		    m_pCurrentEntity->player && 
-		    m_pCurrentEntity->index != gEngfuncs.GetLocalPlayer()->index)
-		{
-			int originalRenderFx   = m_pCurrentEntity->curstate.renderfx;
-			int originalRenderMode = m_pCurrentEntity->curstate.rendermode;
-			int originalRenderAmt  = m_pCurrentEntity->curstate.renderamt;
-			color24 originalColor  = m_pCurrentEntity->curstate.rendercolor;
-
-			// PASSAGEM 1: CHAMS ATRAVÉS DA PAREDE
-			m_pCurrentEntity->curstate.renderfx   = kRenderFxNone;          // sem glow shell antigo
-			m_pCurrentEntity->curstate.rendermode = kRenderTransAdd;        // translúcido = atravessa parede
-			m_pCurrentEntity->curstate.renderamt  = 255;
-
-			// Cor por time
-			if (g_PlayerExtraInfo[m_pCurrentEntity->index].teamnumber == 1) // T
-			{
-				m_pCurrentEntity->curstate.rendercolor.r = 255;
-				m_pCurrentEntity->curstate.rendercolor.g = 50;
-				m_pCurrentEntity->curstate.rendercolor.b = 50;
-			}
-			else // CT
-			{
-				m_pCurrentEntity->curstate.rendercolor.r = 50;
-				m_pCurrentEntity->curstate.rendercolor.g = 50;
-				m_pCurrentEntity->curstate.rendercolor.b = 255;
-			}
-
-			// ====================== ATIVA IGNORE DEPTH (só nessa passagem) ======================
-			gEngfuncs.Cvar_SetValue( "cl_chams_ignore_depth", 1.0f );
-
-			StudioRenderModel(dir);   // ← ESSA PASSAGEM ATRAVESSA A PAREDE
-
-			// ====================== DESATIVA IGNORE DEPTH ======================
-			gEngfuncs.Cvar_SetValue( "cl_chams_ignore_depth", 0.0f );
-
-			// restaura
-			m_pCurrentEntity->curstate.renderfx   = originalRenderFx;
-			m_pCurrentEntity->curstate.rendermode = originalRenderMode;
-			m_pCurrentEntity->curstate.renderamt  = originalRenderAmt;
-			m_pCurrentEntity->curstate.rendercolor = originalColor;
-		}
-
 		if (m_nTopColor < 0) m_nTopColor = 0;
 		if (m_nTopColor > 360) m_nTopColor = 360;
 
 		m_nBottomColor = m_pPlayerInfo->bottomcolor;
+
+		// ====================== CLEAN VISIBILITY: PLAYER SILHOUETTE + HITBOX OUTLINES ======================
+		// 3D outlines drawn only for visible players (respects walls, depth, frustum). Legitimate visibility aid only.
+		// Silhouette: polygon offset cyan "edge highlight" around the actual model.
+		// Hitboxes: precise wireframe (head bright, body subtle). Head-only default for clean look.
+		// Performance: distance culling + early outs.
+
+		cl_entity_t *localPlayer = gEngfuncs.GetLocalPlayer();
+		bool isOtherPlayer = (m_pCurrentEntity->player && localPlayer &&
+		                      m_pCurrentEntity->index != localPlayer->index);
+
+		float playerDistSq = 0.0f;
+		bool withinDrawDist = true;
+		if (isOtherPlayer && localPlayer)
+		{
+			Vector delta = m_pCurrentEntity->origin - localPlayer->origin;
+			playerDistSq = delta.x*delta.x + delta.y*delta.y + delta.z*delta.z; // LengthSqr equivalent
+		}
+
+		// Silhouette outline (cyan edge) - only if enabled and close enough
+		if (cl_player_outline && cl_player_outline->value > 0.0f && isOtherPlayer)
+		{
+			// Reuse the hitbox max dist cvar (or slightly more generous default) for silhouette
+			float maxSilDist = cl_hitbox_outline_max_dist ? cl_hitbox_outline_max_dist->value * 1.4f : 0.0f;
+			if (maxSilDist <= 0.0f || playerDistSq <= (maxSilDist * maxSilDist))
+			{
+				int origRenderFx = m_pCurrentEntity->curstate.renderfx;
+				int origRenderMode = m_pCurrentEntity->curstate.rendermode;
+				int origRenderAmt = m_pCurrentEntity->curstate.renderamt;
+				color24 origColor = m_pCurrentEntity->curstate.rendercolor;
+
+				m_pCurrentEntity->curstate.renderfx = kRenderFxNone;
+				m_pCurrentEntity->curstate.rendermode = kRenderNormal;
+				m_pCurrentEntity->curstate.renderamt = 255;
+				m_pCurrentEntity->curstate.rendercolor.r = 0;
+				m_pCurrentEntity->curstate.rendercolor.g = 255;
+				m_pCurrentEntity->curstate.rendercolor.b = 210;  // cyan
+
+				glPushAttrib(GL_POLYGON_BIT);
+				glEnable(GL_POLYGON_OFFSET_FILL);
+				glPolygonOffset(1.5f, 4.0f);
+
+				StudioRenderModel(dir);  // offset cyan pass (visible surfaces only)
+
+				glPopAttrib();
+
+				// restore state
+				m_pCurrentEntity->curstate.renderfx = origRenderFx;
+				m_pCurrentEntity->curstate.rendermode = origRenderMode;
+				m_pCurrentEntity->curstate.renderamt = origRenderAmt;
+				m_pCurrentEntity->curstate.rendercolor = origColor;
+			}
+		}
+
 		if (m_nBottomColor < 0) m_nBottomColor = 0;
 		if (m_nBottomColor > 360) m_nBottomColor = 360;
 
 		IEngineStudio.StudioSetRemapColors(m_nTopColor, m_nBottomColor);
 
-		StudioRenderModel(dir);   // render normal (por cima)
+		StudioRenderModel(dir);   // normal textured render on top
+
+		// Hitbox outlines (wireframe for aim practice) - clean, head-only by default
+		if (cl_hitbox_outline && cl_hitbox_outline->value > 0.0f && isOtherPlayer)
+		{
+			float maxDist = cl_hitbox_outline_max_dist ? cl_hitbox_outline_max_dist->value : 0.0f;
+			if (maxDist <= 0.0f || playerDistSq <= (maxDist * maxDist))
+			{
+				studiohdr_t *pStudioHdr = m_pStudioHeader;
+				if (pStudioHdr && pStudioHdr->numhitboxes > 0 && m_pbonetransform)
+				{
+					mstudiobbox_t *pHitbox = (mstudiobbox_t *)((byte *)pStudioHdr + pStudioHdr->hitboxindex);
+
+					gEngfuncs.pTriAPI->RenderMode( kRenderTransAdd );
+					glPushAttrib( GL_LINE_BIT );
+
+					for (int i = 0; i < pStudioHdr->numhitboxes; i++)
+					{
+						bool isHead = (pHitbox[i].group == STUDIO_HITGROUP_HEAD);
+
+						if (cl_hitbox_outline_head_only && cl_hitbox_outline_head_only->value > 0.0f && !isHead)
+							continue;
+
+						int bone = pHitbox[i].bone;
+						if (bone < 0 || bone >= MAXSTUDIOBONES) continue;
+
+						float mins[3] = { pHitbox[i].bbmin[0], pHitbox[i].bbmin[1], pHitbox[i].bbmin[2] };
+						float maxs[3] = { pHitbox[i].bbmax[0], pHitbox[i].bbmax[1], pHitbox[i].bbmax[2] };
+
+						if (isHead)
+						{
+							for (int axis = 0; axis < 3; axis++)
+							{
+								float center = (mins[axis] + maxs[axis]) * 0.5f;
+								float halfSize = (maxs[axis] - mins[axis]) * 0.6f; // 20% larger than the model hitbox
+								mins[axis] = center - halfSize;
+								maxs[axis] = center + halfSize;
+							}
+						}
+
+						Vector corners[8] = {
+							{mins[0], mins[1], mins[2]},
+							{maxs[0], mins[1], mins[2]},
+							{maxs[0], maxs[1], mins[2]},
+							{mins[0], maxs[1], mins[2]},
+							{mins[0], mins[1], maxs[2]},
+							{maxs[0], mins[1], maxs[2]},
+							{maxs[0], maxs[1], maxs[2]},
+							{mins[0], maxs[1], maxs[2]}
+						};
+
+						float (*mat)[4] = (*m_pbonetransform)[bone];
+						for (int j = 0; j < 8; j++)
+						{
+							Vector &src = corners[j];
+							Vector out;
+							out[0] = src[0]*mat[0][0] + src[1]*mat[0][1] + src[2]*mat[0][2] + mat[0][3];
+							out[1] = src[0]*mat[1][0] + src[1]*mat[1][1] + src[2]*mat[1][2] + mat[1][3];
+							out[2] = src[0]*mat[2][0] + src[1]*mat[2][1] + src[2]*mat[2][2] + mat[2][3];
+							corners[j] = out;
+						}
+
+						if (isHead)
+						{
+							glLineWidth( 6.0f );
+							gEngfuncs.pTriAPI->Begin( TRI_LINES );
+							gEngfuncs.pTriAPI->Color4ub( 0, 255, 255, 120 );
+							DrawStudioHitboxEdges( corners );
+							gEngfuncs.pTriAPI->End();
+
+							glLineWidth( 3.0f );
+							gEngfuncs.pTriAPI->Begin( TRI_LINES );
+							gEngfuncs.pTriAPI->Color4ub( 140, 255, 255, 255 );
+							DrawStudioHitboxEdges( corners );
+							gEngfuncs.pTriAPI->End();
+						}
+						else
+						{
+							glLineWidth( 1.0f );
+							gEngfuncs.pTriAPI->Begin( TRI_LINES );
+							gEngfuncs.pTriAPI->Color4ub( 180, 180, 180, 70 );
+							DrawStudioHitboxEdges( corners );
+							gEngfuncs.pTriAPI->End();
+						}
+					}
+
+					glPopAttrib();
+					gEngfuncs.pTriAPI->RenderMode( kRenderNormal );
+				}
+			}
+		}
+
+		// Note: 3D silhouette + hitbox outlines implemented directly here (inside visible model render pass)
+		// for perfect depth adherence ("on the model, not through walls"). Canvas 2D available for HUD overlays.
+
+		// Note: 3D silhouette + hitbox outlines are implemented directly here (inside visible model render)
+		// for perfect depth adherence ("on the model, not through walls"). Canvas 2D is available
+		// for other HUD / projected overlays when the engine Canvas ABI is wired in.
+
 		m_pPlayerInfo = NULL;
 
 		if (pplayer->weaponmodel)
@@ -1230,44 +1367,30 @@ int DLLEXPORT HUD_GetStudioModelInterface( int version, struct r_studio_interfac
 }
 
 void DrawTransparentTriangles( void );
-// ====================== ESP DOT PERFEITAMENTE COLADA (centralizada na cabeça) ======================
-// ====================== ESP DOT PERFEITAMENTE COLADA E CENTRALIZADA ======================
+
 void CHud::DrawTransparentTriangles( void )
 {
-    if( !cl_esp || cl_esp->value <= 0.0f )
-        return;
+	// Visibility features (player silhouette + hitbox outlines) are rendered inside
+	// the Studio model path (GameStudioModelRenderer) for correct depth and wall respect.
 
-    float dotSize = cl_esp_dot_size ? cl_esp_dot_size->value : 6.0f;  // cvar de tamanho
-
-    for( int i = 1; i <= 32; i++ )
-    {
-        cl_entity_t *pEnt = gEngfuncs.GetEntityByIndex( i );
-        if( !pEnt || !pEnt->player || pEnt->index == gEngfuncs.GetLocalPlayer()->index ) continue;
-        if( g_PlayerExtraInfo[i].teamnumber == g_iTeamNumber && g_iTeamNumber != 0 ) continue;
-
-        // === POSIÇÃO EXATA DA CABEÇA (mesma do hitbox expandido) ===
-        Vector head = pEnt->origin;
-        head.z += 58.0f;                     // altura perfeita da cabeça
-
-        float screen[2];
-        if( gEngfuncs.pTriAPI->WorldToScreen( head, screen ) != 0 )
-            continue;
-
-        float x = screen[0] * m_scrinfo.iWidth;
-        float y = screen[1] * m_scrinfo.iHeight;
-
-        // === DOT VERDE CENTRALIZADO ===
-        gEngfuncs.pTriAPI->RenderMode( kRenderTransAdd );
-        gEngfuncs.pfnFillRGBA( (int)(x - dotSize/2), (int)(y - dotSize/2),
-                               (int)dotSize, (int)dotSize, 0, 255, 0, 255 );
-
-        gEngfuncs.pTriAPI->RenderMode( kRenderNormal );
-    }
+	// === Canvas 2D example (engine Canvas API) ===
+	// To use 2D drawing (HUD overlays, projected outlines, etc.), do this:
+	//
+	//   #include "engine_canvas_api.h"
+	//   canvas_t *c = ...; // supplied by the engine/renderer integration point
+	//   if (c && c->BeginFrame) {
+	//       c->BeginFrame( ScreenWidth, ScreenHeight );
+	//       c->SetColor(255, 255, 0, 200);
+	//       c->Line(100, 100, 200, 150, 2.0f);
+	//       c->EndFrame();
+	//   }
+	//
+	// Note: Call while 2D projection is active (usually safe in HUD_Redraw or here).
+	// The local gCanvas (C++) wrapper is also available as an alternative.
 }
 
 // ====================== WRAPPER GLOBAL OBRIGATÓRIO PARA O XASH/CS16Client ======================
 // O engine do Xash3D procura essa função GLOBAL (não a da classe CHud).
-// Sem ela o ESP nunca é chamado!
 void DrawTransparentTriangles(void)
 {
     // não desenha se HUD estiver escondido

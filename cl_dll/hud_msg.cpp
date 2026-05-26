@@ -167,12 +167,12 @@ int CHud::MsgFunc_ShadowIdx(const char *pszName, int iSize, void *pbuf)
 }
 
 int CHud::MsgFunc_ServerName( const char *name, int size, void *buf )
-{
-	BufferReader reader( name, buf, size );
-	strncpy( gHUD.m_szServerName, reader.ReadString(), 64 );
-	gHUD.m_szServerName[63] = 0;
-	return 1;
-}
+	{
+		BufferReader reader( name, buf, size );
+		strncpy( gHUD.m_szServerName, reader.ReadString(), sizeof( gHUD.m_szServerName ) );
+		gHUD.m_szServerName[sizeof( gHUD.m_szServerName ) - 1] = 0;
+		return 1;
+	}
 
 int CHud::MsgFunc_Fog( const char *pszName, int iSize, void *pbuf )
 {

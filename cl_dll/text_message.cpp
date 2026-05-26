@@ -178,7 +178,7 @@ char* ConvertCRtoNL( char *str )
 //   string: message parameter 4
 // any string that starts with the character '#' is a message name, and is used to look up the real message in titles.txt
 // the next (optional) one to four strings are parameters for that string (which can also be message names if they begin with '#')
-#define MAX_TEXTMSG_STRING 512
+#define MAX_TEXTMSG_STRING 2048
 int CHudTextMessage::MsgFunc_TextMsg( const char *pszName, int iSize, void *pbuf )
 {
 	BufferReader reader( pszName, pbuf, iSize );

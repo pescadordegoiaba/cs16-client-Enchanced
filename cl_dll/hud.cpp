@@ -46,25 +46,17 @@ cvar_t *cl_fog_g;
 cvar_t *cl_fog_b;
 cvar_t *cl_fog_density;
 
-// AIM ASSIST BÁSICO - DEFINIÇÃO DAS VARIÁVEIS (OBRIGATÓRIO!)
-cvar_t *cl_aim_assist  = nullptr;
-cvar_t *cl_aim_smooth  = nullptr;
-cvar_t *cl_aim_fov     = nullptr;
-cvar_t *cl_esp_dot_size     = nullptr;
-cvar_t *cl_esp    = nullptr;
-cvar_t *cl_chams = nullptr;
-cvar_t *cl_bhop = nullptr;
-cvar_t *cl_norecoil = nullptr;
-cvar_t *cl_nospread = nullptr;
-cvar_t *cl_noaccuracy = nullptr;  // accuracy fix extra
-cvar_t *cl_aim_head_offset = nullptr;
-//cvar_t *cl_walltrans = nullptr;   // novo cvar
+// Clean visibility / drawing features (legitimate player outlines + Canvas support)
+cvar_t *cl_player_outline = nullptr;   // silhouette outline on visible player models
+cvar_t *cl_hitbox_outline = nullptr;   // hitbox outlines on visible players for aiming reference (clean, not ugly)
+cvar_t *cl_hitbox_outline_head_only = nullptr; // only draw head hitbox (recommended for clean look)
+cvar_t *cl_hitbox_outline_max_dist = nullptr;     // max distance to draw hitboxes (performance)
 
 
 
-extern cvar_t *cl_aim_assist;
-extern cvar_t *cl_aim_smooth;
-extern cvar_t *cl_aim_fov;
+
+
+
 
 extern client_sprite_t *GetSpriteList(client_sprite_t *pList, const char *psz, int iRes, int iCount);
 
@@ -309,7 +301,7 @@ void CHud :: Init( void )
 	CVAR_CREATE( "_cl_autowepswitch", "1", FCVAR_ARCHIVE | FCVAR_USERINFO );
 	CVAR_CREATE( "_ah", "0", FCVAR_ARCHIVE | FCVAR_USERINFO );
 
-	// TODO remove hack later
+	// Legacy numerical menu / scoreboard workarounds (kept for compatibility with older VGUI/custom menus)
 	CVAR_CREATE( "numericalmenu", "1", FCVAR_ARCHIVE );
 	CVAR_CREATE( "numericalmenu_clientonly", "1", FCVAR_ARCHIVE );
 	CVAR_CREATE( "checkscoreboard", "1", FCVAR_ARCHIVE );
@@ -334,30 +326,13 @@ void CHud :: Init( void )
 	cl_weapon_sparks = CVAR_CREATE( "cl_weapon_sparks", "1", FCVAR_ARCHIVE );
 	cl_weapon_wallpuff = CVAR_CREATE( "cl_weapon_wallpuff", "1", FCVAR_ARCHIVE );
 	zoom_sens_ratio = CVAR_CREATE( "zoom_sensitivity_ratio", "1.2", 0 );
-    // AIM ASSIST BÁSICO
-    cl_aim_assist = gEngfuncs.pfnRegisterVariable("cl_aim_assist", "0", FCVAR_ARCHIVE);
-    cl_aim_smooth = gEngfuncs.pfnRegisterVariable("cl_aim_smooth", "0.35", FCVAR_ARCHIVE);
-    cl_aim_fov    = gEngfuncs.pfnRegisterVariable("cl_aim_fov", "120", FCVAR_ARCHIVE);
-
-	// ESP DOT
-    cl_esp          = gEngfuncs.pfnRegisterVariable("cl_esp",          "0", FCVAR_ARCHIVE);
-    cl_esp_dot_size = gEngfuncs.pfnRegisterVariable("cl_esp_dot_size", "6.0", FCVAR_ARCHIVE);
-
-	//bhop
-	cl_bhop = gEngfuncs.pfnRegisterVariable("cl_bhop", "0", FCVAR_ARCHIVE);
-
-	cl_norecoil   = gEngfuncs.pfnRegisterVariable("cl_norecoil",   "0", FCVAR_ARCHIVE);
-    cl_nospread   = gEngfuncs.pfnRegisterVariable("cl_nospread",   "0", FCVAR_ARCHIVE);
-    cl_noaccuracy = gEngfuncs.pfnRegisterVariable("cl_noaccuracy", "0", FCVAR_ARCHIVE);
-	cl_aim_head_offset = gEngfuncs.pfnRegisterVariable("cl_aim_head_offset", "72.0", FCVAR_ARCHIVE);
-
-	    // CHAMS / WALLHACK
-    cl_chams = gEngfuncs.pfnRegisterVariable("cl_chams", "0", FCVAR_ARCHIVE);
-	//cl_walltrans = gEngfuncs.pfnRegisterVariable("cl_walltrans", "0", FCVAR_ARCHIVE);
-	cl_charset = gEngfuncs.pfnGetCvarPointer( "cl_charset" );
-	con_charset = gEngfuncs.pfnGetCvarPointer( "con_charset" );
-
 	cl_viewbob = CVAR_CREATE( "cl_viewbob", "1", FCVAR_ARCHIVE );
+
+	// Clean visibility improvements (player outline and hitbox outlines for visible models only)
+	cl_player_outline = gEngfuncs.pfnRegisterVariable("cl_player_outline", "0", FCVAR_ARCHIVE);
+	cl_hitbox_outline = gEngfuncs.pfnRegisterVariable("cl_hitbox_outline", "0", FCVAR_ARCHIVE);
+	cl_hitbox_outline_head_only = gEngfuncs.pfnRegisterVariable("cl_hitbox_outline_head_only", "1", FCVAR_ARCHIVE);
+	cl_hitbox_outline_max_dist = gEngfuncs.pfnRegisterVariable("cl_hitbox_outline_max_dist", "0", FCVAR_ARCHIVE);  // 0 = unlimited
 
 	m_pShowHealth = CVAR_CREATE( "scoreboard_showhealth", "1", FCVAR_ARCHIVE );
 	m_pShowMoney = CVAR_CREATE( "scoreboard_showmoney", "1", FCVAR_ARCHIVE );
@@ -517,15 +492,16 @@ void CHud :: VidInit( void )
 			for ( int index = 0, j = 0; j < m_iSpriteCountAllRes; j++ )
 			{
 				if ( p->iRes == m_iRes )
-				{
-					char sz[256];
-					sprintf(sz, "sprites/%s.spr", p->szSprite);
-					m_rghSprites[index] = SPR_Load(sz);
-					m_rgrcRects[index] = p->rc;
-					strncpy( &m_rgszSpriteNames[index * MAX_SPRITE_NAME_LENGTH], p->szName, MAX_SPRITE_NAME_LENGTH );
+					{
+						char sz[512];
+						snprintf(sz, sizeof( sz ), "sprites/%s.spr", p->szSprite);
+						m_rghSprites[index] = SPR_Load(sz);
+						m_rgrcRects[index] = p->rc;
+						strncpy( &m_rgszSpriteNames[index * MAX_SPRITE_NAME_LENGTH], p->szName, MAX_SPRITE_NAME_LENGTH );
+						m_rgszSpriteNames[(index + 1) * MAX_SPRITE_NAME_LENGTH - 1] = 0;
 
-					index++;
-				}
+						index++;
+					}
 
 				p++;
 			}
@@ -694,4 +670,3 @@ void CHud::AddHudElem(CHudBase *phudelem)
 
 	ptemp->pNext = pdl;
 }
-

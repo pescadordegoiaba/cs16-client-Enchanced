@@ -26,6 +26,11 @@
 #define SF_BEAM_SHADEOUT 0x0100
 #define SF_BEAM_TEMPORARY 0x8000
 
+#define BEAM_POINTS 0
+#define BEAM_ENTPOINT 1
+#define BEAM_ENTS 2
+#define BEAM_HOSE 3
+
 #define SF_SPRITE_STARTON 0x0001
 #define SF_SPRITE_ONCE 0x0002
 #define SF_SPRITE_TEMPORARY 0x8000
@@ -145,8 +150,8 @@ public:
 	inline int GetFlags(void) { return pev->rendermode & 0xF0; }
 	inline int GetStartEntity(void) { return pev->sequence & 0xFFF; }
 	inline int GetEndEntity(void) { return pev->skin & 0xFFF; }
-	const Vector &GetStartPos(void);
-	const Vector &GetEndPos(void);
+	inline const Vector &GetStartPos(void);
+	inline const Vector &GetEndPos(void);
 
 public:
 	Vector Center(void){ return (GetStartPos() + GetEndPos()) * 0.5; }
@@ -215,5 +220,33 @@ public:
 	int m_iszSpriteName;
 	Vector m_firePosition;
 };
+
+inline const Vector &CBeam::GetStartPos(void)
+{
+	if (GetType() == BEAM_ENTS)
+	{
+		edict_t *pent = INDEXENT(GetStartEntity());
+		return pent->v.origin;
+	}
+
+	return pev->origin;
+}
+
+inline const Vector &CBeam::GetEndPos(void)
+{
+	int type = GetType();
+	if (type == BEAM_POINTS || type == BEAM_HOSE)
+	{
+		return pev->angles;
+	}
+
+	edict_t *pent = INDEXENT(GetEndEntity());
+	if (pent)
+	{
+		return pent->v.origin;
+	}
+
+	return pev->angles;
+}
 
 #endif

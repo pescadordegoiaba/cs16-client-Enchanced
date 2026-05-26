@@ -52,8 +52,8 @@ enum
 { 
 	MAX_PLAYERS = 64,
 	MAX_TEAMS = 64,
-	MAX_TEAM_NAME = 16,
-	MAX_LOCATION_NAME = 32
+	MAX_TEAM_NAME = 32,
+	MAX_LOCATION_NAME = 64
 };
 
 #define MAX_HOSTAGES 24
@@ -96,20 +96,6 @@ extern cvar_t *cl_fog_r;
 extern cvar_t *cl_fog_g;
 extern cvar_t *cl_fog_b;
 extern cvar_t *cl_fog_density;
-// AIM ASSIST BÁSICO
-extern cvar_t *cl_aim_assist;
-extern cvar_t *cl_aim_smooth;
-extern cvar_t *cl_aim_fov;
-extern cvar_t *cl_esp_dot_size;
-// CHAMS / WALLHACK
-extern cvar_t *cl_chams;
-extern cvar_t *cl_bhop;
-extern cvar_t *cl_norecoil;
-extern cvar_t *cl_nospread;
-extern cvar_t *cl_noaccuracy;   // accuracy fix extra
-extern cvar_t *cl_aim_head_offset;
-// no topo, junto com outros cvars
-extern cvar_t *cl_chams;
 
 
 struct FogParameters {
@@ -712,7 +698,7 @@ private:
 //
 //-----------------------------------------------------
 //
-#define MAX_SPRITE_NAME_LENGTH	24
+#define MAX_SPRITE_NAME_LENGTH	64
 
 class CHudStatusIcons: public CHudBase
 {
@@ -971,8 +957,7 @@ public:
 	void VidInit( void );
 	void Think( void );
 	void Shutdown( void );
-	// ESP DOT - função que você criou
-    void DrawTransparentTriangles( void );
+	void DrawTransparentTriangles( void );
 	int Redraw( float flTime, int intermission );
 	int UpdateClientData( client_data_t *cdata, float time );
 	void AddHudElem(CHudBase *p);
@@ -1121,7 +1106,7 @@ public:
 	// sprite indexes
 	int m_HUD_number_0;
 
-	char m_szServerName[64];
+	char m_szServerName[128];
 
 	int m_WhiteTex;
 
@@ -1158,12 +1143,7 @@ private:
 
 extern CHud gHUD;
 extern cvar_t *sensitivity;
-// ESP DOT cvars (extern globais - obrigatório)
-extern cvar_t *cl_esp;
-extern cvar_t *cl_esp_dot_size;
-
 extern int g_iTeamNumber;
 extern int g_iUser1;
 extern int g_iUser2;
 extern int g_iUser3;
-

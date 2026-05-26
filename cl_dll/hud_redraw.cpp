@@ -79,18 +79,6 @@ void CHud::Think(void)
 		m_iFOV = max( default_fov->value, 90 );
 	}
 
-    // ====================== BHOP EXTREMAMENTE FÁCIL (cl_bhop 1) ======================
-    // Segure ESPAÇO o tempo todo → bhop perfeito automático
-    // Não quebra pulo normal
-    if (cl_bhop && cl_bhop->value > 0.0f)
-    {
-        cl_entity_t *pLocal = gEngfuncs.GetLocalPlayer();
-        if (pLocal && pLocal->curstate.onground == -1)   // está NO AR
-        {
-            gEngfuncs.pfnClientCmd("-jump");   // força soltar o botão no ar
-        }
-    }
-
 }
 
 
@@ -154,11 +142,14 @@ int CHud :: Redraw( float flTime, int intermission )
 	}
 
 	// update codepage parameters
-	if( !stricmp( con_charset->string, "cp1251" ))
+	const char *consoleCharset = (con_charset && con_charset->string) ? con_charset->string : "";
+	const char *clientCharset = (cl_charset && cl_charset->string) ? cl_charset->string : "";
+
+	if( !stricmp( consoleCharset, "cp1251" ))
 	{
 		g_codepage = 1251;
 	}
-	else if( !stricmp( con_charset->string, "cp1252" ))
+	else if( !stricmp( consoleCharset, "cp1252" ))
 	{
 		g_codepage = 1252;
 	}
@@ -167,7 +158,7 @@ int CHud :: Redraw( float flTime, int intermission )
 		g_codepage = 0;
 	}
 
-	g_accept_utf8 = !stricmp( cl_charset->string, "utf-8" );
+	g_accept_utf8 = !stricmp( clientCharset, "utf-8" );
 
 	SpreadDot_Draw( flTime );
 
