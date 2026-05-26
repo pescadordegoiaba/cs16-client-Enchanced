@@ -1,185 +1,209 @@
-### This Fork is Focus scoped in linux
-* Fully compatible with non-Steam Windows servers; you can play on any CS 1.6 server
-* Fixed MOTD; please report any bugs
+# CS16Client ENCHANCED
 
+Fork do CS16Client focado em Counter-Strike 1.6 no Windows e Linux usando Xash3D. O objetivo deste fork e melhorar compatibilidade com servidores, estabilidade do HUD/client DLL e recursos visuais configuraveis.
 
+Este README documenta apenas Windows e Linux. Plataformas fora desse alvo foram removidas do guia principal.
 
-Play On Manjaro Arch:
+## Plataformas Alvo
+
+- Windows 32-bit.
+- Linux 32-bit em sistemas x86/x86_64.
+- Uso com servidores CS 1.6 Steam/non-Steam compativeis com GoldSrc/Xash3D.
+
+## Alteracoes Do Fork Por Data
+
+### 2026-05-26
+
+#### Hitbox e visibilidade
+
+- `cl_hitbox_outline` desenha hitboxes 3D no caminho do Studio renderer, respeitando profundidade e paredes.
+- `cl_hitbox_outline_head_only` mantem o modo limpo desenhando apenas a cabeca por padrao.
+- `cl_hitbox_outline_max_dist` agora aceita `0` como distancia ilimitada.
+- A hitbox da cabeca ficou 20% maior apenas no grupo oficial `HITGROUP_HEAD`.
+- A cabeca ganhou brilho ciano aditivo mais forte, com uma passada larga de glow e uma linha principal mais clara por cima.
+- Corrigida a deteccao da cabeca: deixou de usar tamanho da caixa e passou a usar `mstudiobbox_t.group == 1`, evitando aumentar hitboxes do corpo por engano.
+- `cl_player_outline` adiciona contorno/silhueta visivel no modelo sem atravessar paredes.
+
+#### Estabilidade do client DLL
+
+- Corrigido crash em `CHud::Redraw` quando `cl_charset` ou `con_charset` ainda nao estavam prontos.
+- Corrigido erro de simbolo indefinido para `CBeam::GetStartPos` e `CBeam::GetEndPos`, mantendo os accessors inline no header.
+- Adicionados valores `BEAM_*` ausentes usados por efeitos antigos.
+- Tratamento de sprites ausentes ficou mais tolerante em areas do HUD que antes podiam produzir comportamento instavel.
+
+#### Limites internos de texto e caminhos
+
+- `MAX_VA_STRING` aumentado para `4096`.
+- `MAX_SYSPATH` aumentado para `4096`.
+- Strings de menu aumentadas para `2048`.
+- Text messages aumentadas para `2048`.
+- Campos de HUD/scoreboard ampliados com copias usando `sizeof` e terminacao nula explicita.
+- Buffer de caminhos de sprites no HUD aumentado para reduzir truncamentos.
+
+#### Canvas e desenho 2D
+
+- Adicionado wrapper local `cl_dll/canvas.cpp` e `cl_dll/canvas.h` para desenho 2D com linhas grossas, retangulos, circulos, scissor e helpers de projecao.
+- Adicionado `engine_canvas_api.h` para declarar a ABI C do Canvas da engine sem conflito com a classe C++ local.
+- O Canvas local salva/restaura estado OpenGL com `glPushAttrib`/`glPopAttrib`, reduzindo corrupcao de estado entre HUD, chuva, outlines e outros desenhos.
+
+#### Build e instalacao testada
+
+- Build 32-bit com CMake/Ninja validado.
+- `client.so` gerado e testado como ELF i386 para uso com Xash3D Linux i386.
+
+### 2026-05-02
+
+Alteracoes ja documentadas anteriormente neste fork:
+
+- Compatibilidade com servidores Windows/non-Steam.
+- Correcao inicial de MOTD.
+- Foco inicial em Linux.
+- Comandos de skin model por arma:
+  - `skin_model_ak47_list`
+  - `skin_model_ak47_set`
+  - `skin_model_(weapon)_list`
+  - `skin_model_(weapon)_set`
+- `aspect_ratio` para alterar proporcao sem trocar resolucao.
+- `cl_spreaddot` para ponto de previsao de spread.
+
+## Instalacao
+
+1. Compile ou baixe a engine Xash3D ENCHANCED.
+2. Tenha Counter-Strike 1.6 instalado legalmente.
+3. Copie as pastas `valve` e `cstrike` para a pasta da engine.
+4. Copie `client.so` ou `client.dll` para:
+
+```text
+cstrike/cl_dlls/
 ```
-🐧 ARCH LINUX — Enable 32-bit
-🔧 1. Enable the multilib repository
 
-Edit:
+5. Execute a engine.
 
-sudo nano /etc/pacman.conf
+## Linux 32-bit
 
-Uncomment:
+### Arch/Manjaro
 
+Habilite `multilib` em `/etc/pacman.conf`:
+
+```ini
 [multilib]
 Include = /etc/pacman.d/mirrorlist
-🔄 2. Update the system
+```
+
+Instale dependencias comuns:
+
+```sh
 sudo pacman -Syu
-📦 3. Install 32-bit dependencies
 sudo pacman -S \
-lib32-mesa \
-lib32-libglvnd \
-lib32-sdl2 \
-lib32-sdl2_image \
-lib32-openal \
-lib32-libpulse \
-lib32-zlib \
-lib32-libpng \
-lib32-libjpeg-turbo
-✅ 4. (Optional) Useful tools
-sudo pacman -S ldd file
-🐧 DEBIAN / UBUNTU — enable 32-bit
-🔧 1. Enable i386 architecture
+  git cmake ninja python \
+  lib32-mesa \
+  lib32-libglvnd \
+  lib32-sdl2 \
+  lib32-sdl2_image \
+  lib32-openal \
+  lib32-libpulse \
+  lib32-zlib \
+  lib32-libpng \
+  lib32-libjpeg-turbo
+```
+
+Diagnostico:
+
+```sh
+ldd ./xash3d | grep "not found"
+file ./xash3d
+file cstrike/cl_dlls/client.so
+```
+
+### Debian/Ubuntu
+
+```sh
 sudo dpkg --add-architecture i386
-🔄 2. Update
 sudo apt update
-📦 3. Install 32-bit dependencies
 sudo apt install -y \
-libgl1-mesa-glx:i386 \
-libgl1-mesa-dri:i386 \
-libsdl2-2.0-0:i386 \
-libsdl2-image-2.0-0:i386 \
-libopenal1:i386 \
-libpulse0:i386 \
-zlib1g:i386 \
-libpng16-16:i386 \
-libjpeg-turbo8:i386
-✅ 4. (Optional) Tools
-sudo apt install file
-🔍 HOW TO CHECK WHAT'S MISSING
-
-You must know this command:
-
-ldd ./xash3d | grep “not found”
-
-Example output:
-
-libSDL2.so.0 => not found
-libopenal.so.1 => not found
-
-👉 Install the corresponding 32-bit version
-
-⚠️ COMMON ERRORS
-❌ “No such file or directory”
-
-→ Usually missing 32-bit libc
-
-❌ “wrong ELF class: ELFCLASS64”
-
-→ you mixed 64-bit with a 32-bit binary
-
-❌ crash without error
-
-→ usually OpenGL or driver
+  git cmake ninja-build python3 \
+  libgl1-mesa-glx:i386 \
+  libgl1-mesa-dri:i386 \
+  libsdl2-2.0-0:i386 \
+  libsdl2-image-2.0-0:i386 \
+  libopenal1:i386 \
+  libpulse0:i386 \
+  zlib1g:i386 \
+  libpng16-16:i386 \
+  libjpeg-turbo8:i386 \
+  file
 ```
 
+Erros comuns:
 
+- `No such file or directory`: normalmente falta libc/dependencia 32-bit.
+- `wrong ELF class: ELFCLASS64`: algum binario 64-bit foi misturado com build 32-bit.
+- Crash sem log claro: normalmente driver/OpenGL ou dependencia 32-bit ausente.
 
+## Build
 
-# CS16Client [![Build Status](https://github.com/Velaron/cs16-client/actions/workflows/build.yml/badge.svg)](https://github.com/Velaron/cs16-client/actions) <img align="right" width="128" height="128" src="https://github.com/Velaron/cs16-client/raw/main/android/app/src/main/ic_launcher-playstore.png" alt="CS16Client" />
-Reverse-engineered Counter Strike 1.6 client, designed for mobile platforms and other officially non-supported platforms.
+Clone:
 
-## Donate
-[![Boosty.to](https://img.shields.io/badge/Boosty-F15F2C?logo=boosty&logoColor=fff&style=for-the-badge)](https://boosty.to/velaron)
-
-[Support me](https://boosty.to/velaron) on Boosty.to, if you like my work and would like to support further development goals, like reverse-engineering other great mods.
-
-Important contributors:
-* [a1batross](https://github.com/a1batross), initial project creator and maintainer.
-* [jeefo](https://github.com/jeefo), the creator of [YaPB](https://github.com/yapb/yapb).
-* The people behind [ReGameDLL_CS](https://github.com/rehlds/ReGameDLL_CS) project.
-* [Vladislav4KZ](https://github.com/Vladislav4KZ), bug-tester and maintainer.
-* [SNMetamorph](https://github.com/SNMetamorph), author of the PSVita port.
-* [Alprnn357](https://github.com/Alprnn357), touch menus maintainer.
-* [wh1tesh1t](https://github.com/wh1tesh1t), [pwd491](https://github.com/pwd491), [Elinsrc](https://github.com/Elinsrc), [xiaodo1337](https://github.com/xiaodo1337), [nekonomicon](https://github.com/nekonomicon), [lewa-j](https://github.com/lewa-j) and others for minor contributions.
-
-## Download
-You can download a build at the `Releases` section, or use these links for common platforms:
-* [Android](https://github.com/Velaron/cs16-client/releases/download/continuous/CS16Client-Android.apk)
-* [Linux](https://github.com/Velaron/cs16-client/releases/download/continuous/CS16Client-Linux-i386.tar.gz)
-* [Windows](https://github.com/Velaron/cs16-client/releases/download/continuous/CS16Client-Windows-X86.zip)
-* [PS Vita](https://github.com/Velaron/cs16-client/releases/download/continuous/CS16Client-PSVita.zip)
-* [macOS (arm64)](https://github.com/Velaron/cs16-client/releases/download/continuous/CS16Client-macOS-arm64.zip) - not tested
-* [macOS (x86_64)](https://github.com/Velaron/cs16-client/releases/download/continuous/CS16Client-macOS-x86_64.zip) - not tested
-
-[Other platforms...](https://github.com/Velaron/cs16-client/releases/tag/continuous)
-
-## Installation
-To run CS16Client you need the [latest developer build of Xash3D FWGS](https://github.com/FWGS/xash3d-fwgs/releases/tag/continuous).
-You have to own the [game on Steam](https://store.steampowered.com/app/10/CounterStrike//) and copy `valve` and `cstrike` folders into your Xash3D FWGS directory.
-After that, just install the APK and run.
-
-## Configuration (CVars)
-| CVar                     | Default       | Min | Max | Description                                                                                 |
-|--------------------------|---------------|-----|-----|---------------------------------------------------------------------------------------------|
-| hud_color                | "255 160 0"   | -   | -   | HUD color in RGB.                                                                           |
-| cl_quakeguns             | 0             | 0   | 1   | Draw centered weapons.                                                                      |
-| cl_weaponlag             | 0             | 0.0 | -   | Enable weapon lag/sway.                                                                     |
-| xhair_additive           | 0             | 0   | 1   | Makes the crosshair additive.                                                               |
-| xhair_color              | "0 255 0 255" | -   | -   | Crosshair's color (RGBA).                                                                   |
-| xhair_dot                | 0             | 0   | 1   | Enables crosshair dot.                                                                      |
-| xhair_dynamic_move       | 1             | 0   | 1   | Jumping, crouching and moving will affect the dynamic crosshair (like cl_dynamiccrosshair). |
-| xhair_dynamic_scale      | 0             | 0   | -   | Scale of the dynamic crosshair movement.                                                    |
-| xhair_gap_useweaponvalue | 0             | 0   | 1   | Makes the crosshair gap scale depend on the active weapon.                                  |
-| xhair_enable             | 0             | 0   | 1   | Enables enhanced crosshair.                                                                 |
-| xhair_gap                | 0             | 0   | 15  | Space between crosshair's lines.                                                            |
-| xhair_pad                | 0             | 0   | -   | Border around crosshair.                                                                    |
-| xhair_size               | 4             | 0   | -   | Crosshair size.                                                                             |
-| xhair_t                  | 0             | 0   | 1   | Enables T-shaped crosshair.                                                                 |
-| xhair_thick              | 0             | 0   | -   | Crosshair thickness.                                     
-## COMMANDS FOR FUN
-
-### Skin Model Commands
-
-| Command | Description |
-| --- | --- |
-| `skin_model_ak47_list` | Lists available AK-47 skin models. |
-| `skin_model_ak47_set` | Sets the AK-47 skin model. |
-| `skin_model_(weapon)_list` | Lists available skin models for a specific weapon. |
-| `skin_model_(weapon)_set` | Sets the skin model for a specific weapon. |
-
-### CVars
-
-| CVar | Default | Min | Max | Description |
-| --- | --- | --- | --- | --- |
-| `aspect_ratio` | `1` | `0.1` | `2` | Change aspect ratio without switching resolution. |
-| `cl_spreaddot` | `1` | `-` | `-` | Enables weapon spread prediction dot. |         
-
-
-## Building
-Clone the source code:
-```shell
-git clone https://github.com/Velaron/cs16-client --recursive
+```sh
+git clone --recursive https://github.com/pescadordegoiaba/cs16-client-Enchanced.git
+cd cs16-client-Enchanced
 ```
 
-### Using CMakePresets.json
-```shell
-cmake --preset <preset-name>
-cmake --build build
-cmake --install build --prefix <path-to-your-installation>
+### Linux
+
+```sh
+cmake --preset linux-release-i386
+cmake --build build -j$(nproc)
+```
+
+Se o preset nao estiver disponivel:
+
+```sh
+cmake -S . -B build -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_C_FLAGS="-m32" \
+  -DCMAKE_CXX_FLAGS="-m32" \
+  -DCMAKE_EXE_LINKER_FLAGS="-m32" \
+  -DCMAKE_SHARED_LINKER_FLAGS="-m32"
+cmake --build build -j$(nproc)
 ```
 
 ### Windows
-```shell
+
+```bat
+git clone --recursive https://github.com/pescadordegoiaba/cs16-client-Enchanced.git
+cd cs16-client-Enchanced
 cmake -A Win32 -S . -B build
 cmake --build build --config Release
-cmake --install build --prefix <path-to-your-installation>
-```
-### Linux
-```shell
-cmake -S . -B build
-cmake --build build -j$(nproc)
-```
-### Android
-```shell
-cd android
-./gradlew assembleRelease
+cmake --install build --prefix C:\path\to\xash3d
 ```
 
-### Download Full CLient
-https://www.youtube.com/watch?v=KKHsY_p3_Co
+## CVars Relevantes Do Fork
 
+```cfg
+cl_player_outline 0
+cl_hitbox_outline 1
+cl_hitbox_outline_head_only 1
+cl_hitbox_outline_max_dist 0
+aspect_ratio 1
+cl_spreaddot 1
+```
+
+## Comandos De Skin Model
+
+| Command | Description |
+| --- | --- |
+| `skin_model_ak47_list` | Lista skins disponiveis para AK-47. |
+| `skin_model_ak47_set` | Define o skin model da AK-47. |
+| `skin_model_(weapon)_list` | Lista skins para uma arma especifica. |
+| `skin_model_(weapon)_set` | Define o skin model de uma arma especifica. |
+
+## Reportando Problemas
+
+Inclua no report:
+
+- Sistema operacional.
+- Saida de `file` para `xash3d` e `client.so`/`client.dll`.
+- Mapa e servidor.
+- Log do console.
+- CVars visuais relevantes, principalmente `cl_hitbox_outline`, `cl_hitbox_outline_head_only` e `cl_hitbox_outline_max_dist`.
