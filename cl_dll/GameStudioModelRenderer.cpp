@@ -53,9 +53,15 @@ extern cvar_t *cl_hitbox_outline_head_only; // only head hitbox (much cleaner, r
 extern cvar_t *cl_hitbox_outline_max_dist;   // max distance for hitbox drawing (perf)
 extern cvar_t *cl_esp;   // 1 = all hitboxes through walls, 2 = head only
 
+// ====================================================================
+// MODIFICADO: EspIsOffline() agora sempre retorna 1 (verdadeiro).
+// Isso faz o ESP funcionar apenas com cl_esp, sem precisar de
+// esp_offline. Original:
+//     return gEngfuncs.pfnGetCvarFloat("esp_offline") > 1.0f;
+// ====================================================================
 static int EspIsOffline(void)
 {
-	return gEngfuncs.pfnGetCvarFloat("esp_offline") > 0.0f;
+	return 1;
 }
 
 #define ANIM_WALK_SEQUENCE 3
@@ -140,7 +146,7 @@ void EspHitbox_Flush(void)
 		maxclients = 128;
 
 	if (!EspIsOffline())
-		g_espCount = 0;
+		g_espCount = 1;
 	else
 	{
 		for (i = 1; i <= maxclients; i++)
@@ -1309,7 +1315,8 @@ int CGameStudioModelRenderer::_StudioDrawPlayer(int flags, entity_state_t *pplay
 
 		// Native ESP: same bones as the model, drawn without the depth test so the
 		// wireframe stays visible through walls. Offline listen-server only.
-		if (EspIsOffline() && cl_esp && cl_esp->value > 0.0f)
+		// (MODIFICADO: EspIsOffline() agora sempre retorna 1; basta cl_esp)
+		if (EspIsOffline() && cl_esp && cl_esp->value > 1.0f)
 		{
 			mstudiobbox_t *pHitbox = (mstudiobbox_t *)((byte *)m_pStudioHeader + m_pStudioHeader->hitboxindex);
 			bool headOnly = cl_esp->value >= 2.0f;
