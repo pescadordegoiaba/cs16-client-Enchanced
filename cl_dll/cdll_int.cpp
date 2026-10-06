@@ -30,6 +30,7 @@
 #include "render_api.h"
 #include "mobility_int.h"
 #include "vgui_parser.h"
+#include "imgui_host.h"
 
 cl_enginefunc_t		gEngfuncs  = { };
 extern void EspHitbox_BeginFrame(void);
@@ -75,6 +76,7 @@ HUD_Shutdown
 */
 void DLLEXPORT HUD_Shutdown( void )
 {
+	ImGui_Shutdown();
 	gHUD.Shutdown();
 	Input_Shutdown();
 	Localize_Free();
@@ -187,6 +189,7 @@ bool isLoaded = false;
 int DLLEXPORT HUD_VidInit( void )
 {
 	gHUD.VidInit();
+	ImGui_VidInit();
 
 	isLoaded = true;
 
@@ -209,6 +212,7 @@ void DLLEXPORT HUD_Init( void )
 {
 	InitInput();
 	gHUD.Init();
+	ImGui_Init();
 	//Scheme_Init();
 }
 
@@ -225,6 +229,7 @@ redraw the HUD.
 int DLLEXPORT HUD_Redraw( float time, int intermission )
 {
 	gHUD.Redraw( time, intermission );
+	ImGui_Frame();
 	EspHitbox_Flush();
 
 	return 1;

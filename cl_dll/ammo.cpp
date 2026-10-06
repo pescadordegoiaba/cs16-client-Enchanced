@@ -31,6 +31,7 @@
 #include "eventscripts.h"
 #include "com_weapons.h"
 #include "draw_util.h"
+#include "hud_layout.h"
 #include "triangleapi.h"
 #include "weapontype.h"
 
@@ -1047,6 +1048,9 @@ int CHudAmmo::Draw(float flTime)
 	// Draw ammo pickup history
 	gHR.DrawAmmoHistory( flTime );
 
+	if( !HudLayout_Show( "ammo" ) )
+		return 1;
+
 	if (!m_pWeapon)
 		return 0;
 
@@ -1071,6 +1075,7 @@ int CHudAmmo::Draw(float flTime)
 
 	// Does this weapon have a clip?
 	y = ScreenHeight - gHUD.m_iFontHeight - gHUD.m_iFontHeight/2;
+	HudLayout_Offset( "ammo", NULL, &y );
 
 	// Does weapon have any ammo at all?
 	if (m_pWeapon->iAmmoType > 0)
@@ -1082,6 +1087,7 @@ int CHudAmmo::Draw(float flTime)
 			// room for the number and the '|' and the current ammo
 			
 			x = ScreenWidth - (8 * AmmoWidth) - iIconWidth;
+			HudLayout_Offset( "ammo", &x, NULL );
 			x = DrawUtils::DrawHudNumber(x, y, iFlags | DHN_3DIGITS, pw->iClip, r, g, b);
 
 			int iBarWidth =  AmmoWidth/10;
@@ -1105,6 +1111,7 @@ int CHudAmmo::Draw(float flTime)
 		{
 			// SPR_Draw a bullets only line
 			x = ScreenWidth - 4 * AmmoWidth - iIconWidth;
+			HudLayout_Offset( "ammo", &x, NULL );
 			x = DrawUtils::DrawHudNumber(x, y, iFlags | DHN_3DIGITS, gWR.CountAmmo(pw->iAmmoType), r, g, b);
 		}
 
@@ -1124,6 +1131,7 @@ int CHudAmmo::Draw(float flTime)
 		{
 			y -= gHUD.m_iFontHeight + gHUD.m_iFontHeight/4;
 			x = ScreenWidth - 4 * AmmoWidth - iIconWidth;
+			HudLayout_Offset( "ammo", &x, NULL );
 			x = DrawUtils::DrawHudNumber(x, y, iFlags|DHN_3DIGITS, gWR.CountAmmo(pw->iAmmo2Type), r, g, b);
 
 			// Draw the ammo Icon

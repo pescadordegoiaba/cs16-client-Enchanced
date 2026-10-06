@@ -31,6 +31,7 @@ version.
 #include "cl_util.h"
 #include "parsemsg.h"
 #include "draw_util.h"
+#include "hud_layout.h"
 #include "triangleapi.h"
 #include "vgui_parser.h"
 #ifndef M_PI
@@ -276,6 +277,9 @@ void CHudRadar::DrawZAxis( Vector pos, int r, int g, int b, int a )
 
 int CHudRadar::Draw(float flTime)
 {
+	if( !HudLayout_Show( "radar" ) )
+		return 1;
+
 	if ( (gHUD.m_iHideHUDDisplay & HIDEHUD_HEALTH) ||
 		 gEngfuncs.IsSpectateOnly() ||
 		 !(gHUD.m_iWeaponBits & (1<<(WEAPON_SUIT))) ||
@@ -285,15 +289,18 @@ int CHudRadar::Draw(float flTime)
 	int iTeamNumber = g_PlayerExtraInfo[ gHUD.m_Scoreboard.m_iPlayerNum ].teamnumber;
 	int r, g, b;
 
+	int radar_x = 0, radar_y = 0;
+	HudLayout_Offset( "radar", &radar_x, &radar_y );
+
 	if( cl_radartype->value )
 	{
 		SPR_Set(m_hRadarOpaque.spr, 200, 200, 200);
-		SPR_DrawHoles(0, 0, 0, &m_hRadarOpaque.rect);
+		SPR_DrawHoles(0, radar_x, radar_y, &m_hRadarOpaque.rect);
 	}
 	else
 	{
 		SPR_Set( m_hRadar.spr, 25, 75, 25 );
-		SPR_DrawAdditive( 0, 0, 0, &m_hRadarOpaque.rect );
+		SPR_DrawAdditive( 0, radar_x, radar_y, &m_hRadarOpaque.rect );
 	}
 
 	if( bUseRenderAPI )
@@ -405,11 +412,13 @@ inline void CHudRadar::DrawColoredTexture( int x, int y, int size, byte r, byte 
 
 	// gEngfuncs.pTriAPI->Begin( TRI_QUADS );
 
+	int ox = 0, oy = 0;
+	HudLayout_Offset( "radar", &ox, &oy );
 	gEngfuncs.pTriAPI->Color4ub( r, g, b, a );
-	DrawUtils::Draw2DQuad( (iMaxRadius + x - size * 2) * gHUD.m_flScale,
-						   (iMaxRadius + y - size * 2) * gHUD.m_flScale,
-						   (iMaxRadius + x + size * 2) * gHUD.m_flScale,
-						   (iMaxRadius + y + size * 2) * gHUD.m_flScale);
+	DrawUtils::Draw2DQuad( (iMaxRadius + x - size * 2) * gHUD.m_flScale + ox,
+						   (iMaxRadius + y - size * 2) * gHUD.m_flScale + oy,
+						   (iMaxRadius + x + size * 2) * gHUD.m_flScale + ox,
+						   (iMaxRadius + y + size * 2) * gHUD.m_flScale + oy);
 	
 	// gEngfuncs.pTriAPI->End();
 }
@@ -424,7 +433,9 @@ void CHudRadar::DrawRadarDot( int x, int y, int r, int g, int b, int a )
 	}
 	else
 	{
-		FillRGBA(iMaxRadius + x - size*2, iMaxRadius + y - size*2, size*4, size*4, r, g, b, a);
+		int ox = 0, oy = 0;
+		HudLayout_Offset( "radar", &ox, &oy );
+		FillRGBA(iMaxRadius + x - size*2 + ox, iMaxRadius + y - size*2 + oy, size*4, size*4, r, g, b, a);
 	}
 }
 

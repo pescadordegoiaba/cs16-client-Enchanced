@@ -22,6 +22,7 @@
 #include "parsemsg.h"
 #include "cl_util.h"
 #include "draw_util.h"
+#include "hud_layout.h"
 
 int CHudBattery::Init( void )
 {
@@ -71,7 +72,7 @@ int CHudBattery:: MsgFunc_Battery(const char *pszName, int iSize, void *pbuf )
 
 int CHudBattery::Draw( float flTime )
 {
-	if( gHUD.m_iHideHUDDisplay & HIDEHUD_HEALTH )
+	if( !HudLayout_Show( "armor" ) || ( gHUD.m_iHideHUDDisplay & HIDEHUD_HEALTH ) )
 		return 1;
 
 	if (!(gHUD.m_iWeaponBits & (1<<(WEAPON_SUIT)) ))
@@ -112,6 +113,7 @@ int CHudBattery::Draw( float flTime )
 	
 	y = ScreenHeight - gHUD.m_iFontHeight - gHUD.m_iFontHeight / 2;
 	x = ScreenWidth / 5;
+	HudLayout_Offset( "armor", &x, &y );
 
 	// make sure we have the right sprite handles
 	SPR_Set( m_hFull[m_enArmorType].spr, r, g, b );

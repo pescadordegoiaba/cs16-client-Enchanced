@@ -24,6 +24,7 @@
 #include <string.h>
 #include <stdio.h>
 #include "draw_util.h"
+#include "imgui_menu.h"
 
 //#include "vgui_TeamFortressViewport.h"
 
@@ -238,6 +239,7 @@ int CHudMenu::MsgFunc_VGUIMenu( const char *pszName, int iSize, void *pbuf )
 
 int CHudMenu::MsgFunc_BuyClose(const char *pszName, int iSize, void *pbuf)
 {
+	ImGuiMenu_Close();
 	Touch_CloseMenu();
 
 	return 1;
@@ -277,47 +279,19 @@ void CHudMenu::ShowVGUIMenu( int menuType )
 	switch(menuType)
 	{
 	case MENU_TEAM:
-		szCmd = "exec touch/chooseteam.cfg";
-		break;
 	case MENU_CLASS_T:
-		szCmd = "exec touch/chooseteam_tr.cfg";
-		break;
 	case MENU_CLASS_CT:
-		szCmd = "exec touch/chooseteam_ct.cfg";
-		break;
 	case MENU_BUY:
-		szCmd = "exec touch/buy.cfg";
-		break;
 	case MENU_BUY_PISTOL:
-		if( g_PlayerExtraInfo[gHUD.m_Scoreboard.m_iPlayerNum].teamnumber == TEAM_TERRORIST )
-			szCmd = "exec touch/buy_pistol_t.cfg";
-		else szCmd = "exec touch/buy_pistol_ct.cfg";
-		break;
 	case MENU_BUY_SHOTGUN:
-		if( g_PlayerExtraInfo[gHUD.m_Scoreboard.m_iPlayerNum].teamnumber == TEAM_TERRORIST )
-			szCmd = "exec touch/buy_shotgun_t.cfg";
-		else szCmd = "exec touch/buy_shotgun_ct.cfg";
-		break;
 	case MENU_BUY_RIFLE:
-		if( g_PlayerExtraInfo[gHUD.m_Scoreboard.m_iPlayerNum].teamnumber == TEAM_TERRORIST )
-			szCmd = "exec touch/buy_rifle_t.cfg";
-		else szCmd ="exec touch/buy_rifle_ct.cfg";
-		break;
 	case MENU_BUY_SUBMACHINEGUN:
-		if( g_PlayerExtraInfo[gHUD.m_Scoreboard.m_iPlayerNum].teamnumber == TEAM_TERRORIST )
-			szCmd = "exec touch/buy_submachinegun_t.cfg";
-		else szCmd = "exec touch/buy_submachinegun_ct.cfg";
-		break;
 	case MENU_BUY_MACHINEGUN:
-		if( g_PlayerExtraInfo[gHUD.m_Scoreboard.m_iPlayerNum].teamnumber == TEAM_TERRORIST )
-			szCmd = "exec touch/buy_machinegun_t.cfg";
-		else szCmd = "exec touch/buy_machinegun_ct.cfg";
-		break;
 	case MENU_BUY_ITEM:
-		if( g_PlayerExtraInfo[gHUD.m_Scoreboard.m_iPlayerNum].teamnumber == TEAM_TERRORIST )
-			szCmd = "exec touch/buy_item_t.cfg";
-		else szCmd = "exec touch/buy_item_ct.cfg";
-		break;
+		ImGuiMenu_Open( menuType, m_bitsValidSlots );
+		m_fMenuDisplayed = 0;
+		m_iFlags &= ~HUD_DRAW;
+		return;
 	case MENU_RADIOA:
 		szCmd = "exec touch/radioa.cfg";
 		break;

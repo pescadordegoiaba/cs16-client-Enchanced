@@ -17,6 +17,7 @@
 #include "camera.h"
 #include "in_defs.h"
 #include "view.h"
+#include "imgui_host.h"
 #include <string.h>
 #include <ctype.h>
 
@@ -337,7 +338,9 @@ HUD_Key_Event
 int DLLEXPORT HUD_Key_Event( int down, int keynum, const char *pszCurrentBinding )
 {
 	(void)pszCurrentBinding;
-	return Aimbot_Key( down, keynum );
+	if( !Aimbot_Key( down, keynum ) )
+		return 0;
+	return ImGui_KeyEvent( down, keynum );
 }
 
 void IN_BreakDown( void ) { KeyDown( &in_break );}

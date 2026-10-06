@@ -27,6 +27,7 @@
 #include <ctype.h>
 #include "vgui_parser.h"
 #include "draw_util.h"
+#include "hud_layout.h"
 #include "com_weapons.h"
 //#include "vgui_TeamFortressViewport.h"
 
@@ -99,7 +100,7 @@ int CHudSayText :: Draw( float flTime )
 	int y = Y_START;
 
 	//if ( ( gViewPort && gViewPort->AllowedToPrintText() == FALSE) || !m_HUD_saytext->value )
-	if ( !m_HUD_saytext->value )
+	if ( !m_HUD_saytext->value || !HudLayout_Show( "chat" ) )
 		return 1;
 
 	// make sure the scrolltime is within reasonable bounds,  to guard against the clock being reset
@@ -122,17 +123,28 @@ int CHudSayText :: Draw( float flTime )
 		}
 	}
 	
+	{
+		int chat_x = 0;
+		HudLayout_Offset( "chat", &chat_x, &y );
+		(void)chat_x;
+	}
+
 	for (int i = 0; i < MAX_LINES; i++)
 	{
 		if (!g_szLineBuffer[i][0]) // skip empty string
 			continue;
 
 		int current_x = LINE_START;
+		HudLayout_Offset( "chat", &current_x, NULL );
 		const char* text = g_szLineBuffer[i];
 		size_t length = strlen(text);
 
 		// default color if not set
-		DrawUtils::SetConsoleTextColor(g_ColorYellow[0], g_ColorYellow[1], g_ColorYellow[2]);
+		{
+			float cr, cg, cb;
+			HudLayout_ChatColor( &cr, &cg, &cb );
+			DrawUtils::SetConsoleTextColor( cr, cg, cb );
+		}
 
 		// buffer for accumulating characters of the same color
 		char color_buffer[256] = {0};
@@ -157,8 +169,12 @@ int CHudSayText :: Draw( float flTime )
 				switch (color_code)
 				{
 					case '\x01': // yellow normal
-						DrawUtils::SetConsoleTextColor(g_ColorYellow[0], g_ColorYellow[1], g_ColorYellow[2]);
+					{
+						float cr, cg, cb;
+						HudLayout_ChatColor( &cr, &cg, &cb );
+						DrawUtils::SetConsoleTextColor( cr, cg, cb );
 						break;
+					}
 					case '\x03': // team color
 						if (g_pflNameColors[i])
 						{

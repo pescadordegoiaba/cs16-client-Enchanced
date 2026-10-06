@@ -22,6 +22,7 @@
 #include <string.h>
 #include <stdio.h>
 #include "draw_util.h"
+#include "hud_layout.h"
 
 float color[3];
 
@@ -111,6 +112,9 @@ int CHudDeathNotice :: Draw( float flTime )
 {
 	int x, y, r, g, b, i;
 
+	if( !HudLayout_Show( "death" ) )
+		return 1;
+
 	for( i = 0; i < MAX_DEATHNOTICES; i++ )
 	{
 		if ( rgDeathNoticeList[i].iId == 0 )
@@ -151,6 +155,8 @@ int CHudDeathNotice :: Draw( float flTime )
 			x = ScreenWidth - DrawUtils::ConsoleStringLen(rgDeathNoticeList[i].szVictim) - (gHUD.GetSpriteRect(id).Width());
 			if( rgDeathNoticeList[i].iHeadShotId && m_HUD_d_headshot >= 0 )
 				x -= gHUD.GetSpriteRect(m_HUD_d_headshot).Width();
+
+			HudLayout_Offset( "death", &x, &y );
 
 			if ( !rgDeathNoticeList[i].bSuicide )
 			{

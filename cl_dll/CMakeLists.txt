@@ -31,6 +31,15 @@ list(APPEND CS_CLIENT_SRC ${CS_INPUT_SRC})
 list(APPEND CS_CLIENT_SRC ${CS_GAMSH_SRC})
 list(APPEND CS_CLIENT_SRC ${MINIUTL_SRC})
 
+set(IMGUI_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../3rdparty/imgui")
+list(APPEND CS_CLIENT_SRC
+	${IMGUI_DIR}/imgui.cpp
+	${IMGUI_DIR}/imgui_draw.cpp
+	${IMGUI_DIR}/imgui_tables.cpp
+	${IMGUI_DIR}/imgui_widgets.cpp
+	${IMGUI_DIR}/imgui_demo.cpp
+	${IMGUI_DIR}/backends/imgui_impl_opengl2.cpp)
+
 include_directories(
 	include
 	include/hud
@@ -47,7 +56,9 @@ include_directories(
 	../3rdparty/mainui_cpp
 	../3rdparty/mainui_cpp/controls
 	../3rdparty/mainui_cpp/menus
-	../3rdparty/mainui_cpp/miniutl)
+	../3rdparty/mainui_cpp/miniutl
+	${IMGUI_DIR}
+	${IMGUI_DIR}/backends)
 
 add_definitions(-DCLIENT_WEAPONS -DCLIENT_DLL -DSTDINT_H=<cstdint>)
 
@@ -59,6 +70,9 @@ else()
 endif()
 
 add_library(${CLIENT_LIB} SHARED ${CS_CLIENT_SRC})
+
+find_package(OpenGL REQUIRED)
+target_link_libraries(${CLIENT_LIB} PRIVATE OpenGL::GL)
 
 set_target_postfix(${CLIENT_LIB})
 

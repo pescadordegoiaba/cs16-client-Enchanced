@@ -29,6 +29,7 @@
 #include "eventscripts.h"
 
 #include "draw_util.h"
+#include "hud_layout.h"
 
 #include "ev_hldm.h"
 #include "com_weapons.h"
@@ -250,7 +251,7 @@ void CHudHealth::GetPainColor( int &r, int &g, int &b, int &a )
 
 int CHudHealth::Draw(float flTime)
 {
-	if( !(gHUD.m_iHideHUDDisplay & HIDEHUD_HEALTH ) && !gEngfuncs.IsSpectateOnly() )
+	if( HudLayout_Show( "health" ) && !(gHUD.m_iHideHUDDisplay & HIDEHUD_HEALTH ) && !gEngfuncs.IsSpectateOnly() )
 	{
 		DrawHealthBar( flTime );
 		DrawDamage( flTime );
@@ -277,6 +278,7 @@ void CHudHealth::DrawHealthBar( float flTime )
 
 		y = ScreenHeight - gHUD.m_iFontHeight - gHUD.m_iFontHeight / 2;
 		x = CrossWidth /2;
+		HudLayout_Offset( "health", &x, &y );
 
 		SPR_Set(gHUD.GetSprite(m_HUD_cross), r, g, b);
 		SPR_DrawAdditive(0, x, y, &gHUD.GetSpriteRect(m_HUD_cross));

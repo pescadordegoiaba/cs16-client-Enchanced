@@ -36,6 +36,7 @@ version.
 #include "vgui_parser.h"
 #include <string.h>
 #include "draw_util.h"
+#include "hud_layout.h"
 
 int CHudTimer::Init()
 {
@@ -55,7 +56,7 @@ int CHudTimer::VidInit()
 
 int CHudTimer::Draw( float fTime )
 {
-	if ( ( gHUD.m_iHideHUDDisplay & HIDEHUD_HEALTH ) )
+	if( !HudLayout_Show( "timer" ) || ( gHUD.m_iHideHUDDisplay & HIDEHUD_HEALTH ) )
 		return 1;
 
 	if (!(gHUD.m_iWeaponBits & (1<<(WEAPON_SUIT)) ))
@@ -92,6 +93,7 @@ int CHudTimer::Draw( float fTime )
 
 	int x = (ScreenWidth - totalWidth) / 2;
 	int y = ScreenHeight - 1.5 * gHUD.m_iFontHeight;
+	HudLayout_Offset( "timer", &x, &y );
 
 	SPR_Set(gHUD.GetSprite(m_HUD_timer), r, g, b);
 	SPR_DrawAdditive(0, x, y, &gHUD.GetSpriteRect(m_HUD_timer));

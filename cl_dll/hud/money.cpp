@@ -38,6 +38,7 @@ version.
 #include <string.h>
 #include "vgui_parser.h"
 #include "draw_util.h"
+#include "hud_layout.h"
 
 int CHudMoney::Init( )
 {
@@ -60,7 +61,7 @@ int CHudMoney::VidInit()
 
 int CHudMoney::Draw(float flTime)
 {
-	if(( gHUD.m_iHideHUDDisplay & ( HIDEHUD_HEALTH ) ))
+	if( !HudLayout_Show( "money" ) || ( gHUD.m_iHideHUDDisplay & ( HIDEHUD_HEALTH ) ) )
 		return 1;
 
 	if (!(gHUD.m_iWeaponBits & (1<<(WEAPON_SUIT))))
@@ -79,6 +80,7 @@ int CHudMoney::Draw(float flTime)
 
 	int x = ScreenWidth - iDollarWidth * 7;
 	int y = MONEY_YPOS;
+	HudLayout_Offset( "money", &x, &y );
 
 	if( m_iBlinkAmt )
 	{

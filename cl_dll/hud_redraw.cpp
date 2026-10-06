@@ -25,6 +25,7 @@
 #include <string.h>
 
 #include "draw_util.h"
+#include "hud_layout.h"
 
 
 #include "skin_model.h"
@@ -171,6 +172,12 @@ int CHud :: Redraw( float flTime, int intermission )
 void CHud::UpdateDefaultHUDColor()
 {
 	int r, g, b;
+
+	HudLayout_Color( &r, &g, &b );
+	if( r >= 0 ) {
+		m_iDefaultHUDColor = (r << 16) | (g << 8) | b;
+		return;
+	}
 
 	if (sscanf(m_pCvarColor->string, "%d %d %d", &r, &g, &b) == 3) {
 		r = max(r, 0);
