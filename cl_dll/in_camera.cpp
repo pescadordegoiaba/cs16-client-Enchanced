@@ -14,12 +14,29 @@
 #include "const.h"
 #include "camera.h"
 #include "in_defs.h"
+#include "input.h"
 #ifdef _WIN32
 #include "port.h"
 #endif
 float CL_KeyState (kbutton_t *key);
 
 extern cl_enginefunc_t gEngfuncs;
+extern cvar_t *sensitivity;
+
+static void CAM_TakeMouseDelta( float *dx, float *dy )
+{
+	static cvar_t *edx, *edy;
+
+	if( !edx )
+		edx = gEngfuncs.pfnGetCvarPointer( "evdev_dx" );
+	if( !edy )
+		edy = gEngfuncs.pfnGetCvarPointer( "evdev_dy" );
+
+	*dx = edx ? edx->value : 0;
+	*dy = edy ? edy->value : 0;
+	if( edx ) edx->value = 0;
+	if( edy ) edy->value = 0;
+}
 
 //-------------------------------------------------- Constants
 
@@ -170,86 +187,30 @@ void DLLEXPORT CAM_Think( void )
 	//
 	//movement of the camera with the mouse
 	//
-	if (cam_mousemove)
+	if (cam_mousemove && !cam_distancemove)
 	{
-	    //get windows cursor position
-		GetCursorPos (&cam_mouse);
-		//check for X delta values and adjust accordingly
-		//eventually adjust YAW based on amount of movement
-	  //don't do any movement of the cam using YAW/PITCH if we are zooming in/out the camera	
-	  if (!cam_distancemove)
-	  {
-		
-		//keep the camera within certain limits around the player (ie avoid certain bad viewing angles)  
-		if (cam_mouse.x>gEngfuncs.GetWindowCenterX())
-		{
-			//if ((camAngles[YAW]>=225.0)||(camAngles[YAW]<135.0))
-			if (camAngles[YAW]<c_maxyaw->value)
-			{
-				camAngles[ YAW ] += (CAM_ANGLE_MOVE)*((cam_mouse.x-gEngfuncs.GetWindowCenterX())/2);
-			}
-			if (camAngles[YAW]>c_maxyaw->value)
-			{
-				
-				camAngles[YAW]=c_maxyaw->value;
-			}
-		}
-		else if (cam_mouse.x<gEngfuncs.GetWindowCenterX())
-		{
-			//if ((camAngles[YAW]<=135.0)||(camAngles[YAW]>225.0))
-			if (camAngles[YAW]>c_minyaw->value)
-			{
-			   camAngles[ YAW ] -= (CAM_ANGLE_MOVE)* ((gEngfuncs.GetWindowCenterX()-cam_mouse.x)/2);
-			   	
-			}
-			if (camAngles[YAW]<c_minyaw->value)
-			{
-				camAngles[YAW]=c_minyaw->value;
-				
-			}
-		}
+		float dx, dy;
 
-		//check for y delta values and adjust accordingly
-		//eventually adjust PITCH based on amount of movement
-		//also make sure camera is within bounds
-		if (cam_mouse.y>gEngfuncs.GetWindowCenterY())
-		{
-			if(camAngles[PITCH]<c_maxpitch->value)
-			{
-			    camAngles[PITCH] +=(CAM_ANGLE_MOVE)* ((cam_mouse.y-gEngfuncs.GetWindowCenterY())/2);
-			}
-			if (camAngles[PITCH]>c_maxpitch->value)
-			{
-				camAngles[PITCH]=c_maxpitch->value;
-			}
-		}
-		else if (cam_mouse.y<gEngfuncs.GetWindowCenterY())
-		{
-			if (camAngles[PITCH]>c_minpitch->value)
-			{
-			   camAngles[PITCH] -= (CAM_ANGLE_MOVE)*((gEngfuncs.GetWindowCenterY()-cam_mouse.y)/2);
-			}
-			if (camAngles[PITCH]<c_minpitch->value)
-			{
-				camAngles[PITCH]=c_minpitch->value;
-			}
-		}
+		CAM_TakeMouseDelta( &dx, &dy );
+		flSensitivity = gHUD.GetSensitivity();
+		if( flSensitivity == 0 && sensitivity )
+			flSensitivity = sensitivity->value;
+		if( flSensitivity == 0 )
+			flSensitivity = 1;
 
-		//set old mouse coordinates to current mouse coordinates
-		//since we are done with the mouse
+		if( m_yaw )
+			camAngles[YAW] += dx * flSensitivity * m_yaw->value;
+		if( m_pitch )
+			camAngles[PITCH] += dy * flSensitivity * m_pitch->value;
 
-		if ( ( flSensitivity = gHUD.GetSensitivity() ) != 0 )
-		{
-			cam_old_mouse_x=cam_mouse.x*flSensitivity;
-			cam_old_mouse_y=cam_mouse.y*flSensitivity;
-		}
-		else
-		{
-			cam_old_mouse_x=cam_mouse.x;
-			cam_old_mouse_y=cam_mouse.y;
-		}
-		SetCursorPos (gEngfuncs.GetWindowCenterX(), gEngfuncs.GetWindowCenterY());
-	  }
+		if (camAngles[YAW] > c_maxyaw->value)
+			camAngles[YAW] = c_maxyaw->value;
+		if (camAngles[YAW] < c_minyaw->value)
+			camAngles[YAW] = c_minyaw->value;
+		if (camAngles[PITCH] > c_maxpitch->value)
+			camAngles[PITCH] = c_maxpitch->value;
+		if (camAngles[PITCH] < c_minpitch->value)
+			camAngles[PITCH] = c_minpitch->value;
 	}
 
 	//Nathan code here
@@ -280,33 +241,15 @@ void DLLEXPORT CAM_Think( void )
 
 	if (cam_distancemove)
 	{
-		if (cam_mouse.y>gEngfuncs.GetWindowCenterY())
-		{
-			if(dist<c_maxdistance->value)
-			{
-				dist +=CAM_DIST_DELTA * ((cam_mouse.y-gEngfuncs.GetWindowCenterY())/2.0);
-			}
-			if (dist>c_maxdistance->value)
-			{
-				dist=c_maxdistance->value;
-			}
-		}
-		else if (cam_mouse.y<gEngfuncs.GetWindowCenterY())
-		{
-			if (dist>c_mindistance->value)
-			{
-			   dist -= (CAM_DIST_DELTA)*((gEngfuncs.GetWindowCenterY()-cam_mouse.y)/2.0);
-			}
-			if (dist<c_mindistance->value)
-			{
-				dist=c_mindistance->value;
-			}
-		}
-		//set old mouse coordinates to current mouse coordinates
-		//since we are done with the mouse
-		cam_old_mouse_x=cam_mouse.x*gHUD.GetSensitivity();
-		cam_old_mouse_y=cam_mouse.y*gHUD.GetSensitivity();
-		SetCursorPos (gEngfuncs.GetWindowCenterX(), gEngfuncs.GetWindowCenterY());
+		float dx, dy;
+
+		CAM_TakeMouseDelta( &dx, &dy );
+		dist += dy * 0.5f;
+		if (dist > c_maxdistance->value)
+			dist = c_maxdistance->value;
+		if (dist < c_mindistance->value)
+			dist = c_mindistance->value;
+		(void)dx;
 	}
 	// update ideal
 	cam_idealpitch->value = camAngles[ PITCH ];

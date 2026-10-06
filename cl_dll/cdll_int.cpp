@@ -32,6 +32,8 @@
 #include "vgui_parser.h"
 
 cl_enginefunc_t		gEngfuncs  = { };
+extern void EspHitbox_BeginFrame(void);
+extern void EspHitbox_Flush(void);
 render_api_t		gRenderAPI = { };
 mobile_engfuncs_t	gMobileAPI = { };
 CHud gHUD;
@@ -223,6 +225,7 @@ redraw the HUD.
 int DLLEXPORT HUD_Redraw( float time, int intermission )
 {
 	gHUD.Redraw( time, intermission );
+	EspHitbox_Flush();
 
 	return 1;
 }
@@ -271,6 +274,7 @@ Called by engine every frame that client .dll is loaded
 
 void DLLEXPORT HUD_Frame( double time )
 {
+	EspHitbox_BeginFrame();
 #ifdef _CS16CLIENT_ENABLE_GSRC_SUPPORT
 	gEngfuncs.VGui_ViewportPaintBackground(HUD_GetRect());
 #endif

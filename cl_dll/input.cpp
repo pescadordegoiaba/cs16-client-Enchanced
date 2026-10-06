@@ -7,10 +7,6 @@
 
 // cl.input.c  -- builds an intended movement command to send to the server
 
-//xxxxxx Move bob and pitch drifting code here and other stuff from view if needed
-
-// Quake is a trademark of Id Software, Inc., (c) 1996 Id Software, Inc. All
-// rights reserved.
 #include "hud.h"
 #include "cl_util.h"
 #include "camera.h"
@@ -29,10 +25,12 @@
 
 extern int g_weaponselect;
 extern cl_enginefunc_t gEngfuncs;
+
 // AIM ASSIST BÁSICO
 extern cvar_t *cl_aim_assist;
 extern cvar_t *cl_aim_smooth;
 extern cvar_t *cl_aim_fov;
+extern cvar_t *cl_aim_head_offset;
 
 // Defined in pm_math.c
 float anglemod( float a );
@@ -45,7 +43,8 @@ void VectorAngles( const float *forward, float *angles );
 int CL_ButtonBits( int );
 
 // xxx need client dll function to get and clear impuse
-extern cvar_t *in_joystick;
+// DEFINICAO REAL — antes era extern, agora e a unica definicao no projeto.
+cvar_t *in_joystick = NULL;
 
 int	in_impulse	= 0;
 int	in_cancel	= 0;
@@ -73,18 +72,7 @@ cvar_t	*cl_vsmoothing;
 
 KEY BUTTONS
 
-Continuous button event tracking is complicated by the fact that two different
-input sources (say, mouse button 1 and the control key) can both press the
-same button, but the button should only be released when both of the
-pressing key have been released.
-
-When a key event issues a button command (+forward, +attack, etc), it appends
-its key number as a parameter to the command so it can be matched up with
-the release.
-
-state bit 0 is the current state of the key
-state bit 1 is edge triggered on the up to down transition
-state bit 2 is edge triggered on the down to up transition
+... (resto do bloco de comentario inalterado)
 
 ===============================================================================
 */
@@ -128,10 +116,6 @@ kblist_t *g_kbkeys = NULL;
 /*
 ============
 KB_ConvertString
-
-Removes references to +use and replaces them with the keyname in the output string.  If
- a binding is unfound, then the original text is retained.
-NOTE:  Only works for text with +word in it.
 ============
 */
 int KB_ConvertString( char *in, char **ppout )
@@ -164,7 +148,6 @@ int KB_ConvertString( char *in, char **ppout )
 			pBinding = NULL;
 			if ( strlen( binding + 1 ) > 0 )
 			{
-				// See if there is a binding for binding?
 				pBinding = gEngfuncs.Key_LookupBinding( binding + 1 );
 			}
 
@@ -206,8 +189,6 @@ int KB_ConvertString( char *in, char **ppout )
 /*
 ============
 KB_Find
-
-Allows the engine to get a kbutton_t directly ( so it can check +mlook state, etc ) for saving out to .cfg files
 ============
 */
 struct kbutton_s DLLEXPORT *KB_Find( const char *name )
@@ -227,8 +208,6 @@ struct kbutton_s DLLEXPORT *KB_Find( const char *name )
 /*
 ============
 KB_Add
-
-Add a kbutton_t * to the list of pointers the engine can retrieve via KB_Find
 ============
 */
 void KB_Add( const char *name, kbutton_t *pkb )
@@ -254,8 +233,6 @@ void KB_Add( const char *name, kbutton_t *pkb )
 /*
 ============
 KB_Init
-
-Add kbutton_t definitions that the engine can query if needed
 ============
 */
 void KB_Init( void )
@@ -270,8 +247,6 @@ void KB_Init( void )
 /*
 ============
 KB_Shutdown
-
-Clear kblist
 ============
 */
 void KB_Shutdown( void )
@@ -301,10 +276,10 @@ void KeyDown (kbutton_t *b)
 	if (c[0])
 		k = atoi(c);
 	else
-		k = -1;		// typed manually at the console for continuous down
+		k = -1;
 
 	if (k == b->down[0] || k == b->down[1])
-		return;		// repeating key
+		return;
 	
 	if (!b->down[0])
 		b->down[0] = k;
@@ -317,8 +292,8 @@ void KeyDown (kbutton_t *b)
 	}
 	
 	if (b->state & 1)
-		return;		// still down
-	b->state |= 1 + 2;	// down + impulse down
+		return;
+	b->state |= 1 + 2;
 }
 
 /*
@@ -335,9 +310,9 @@ void KeyUp (kbutton_t *b)
 	if (c[0])
 		k = atoi(c);
 	else
-	{ // typed manually at the console, assume for unsticking, so clear all
+	{
 		b->down[0] = b->down[1] = 0;
-		b->state = 4;	// impulse up
+		b->state = 4;
 		return;
 	}
 
@@ -346,25 +321,22 @@ void KeyUp (kbutton_t *b)
 	else if (b->down[1] == k)
 		b->down[1] = 0;
 	else
-		return;		// key up without coresponding down (menu pass through)
+		return;
 	if (b->down[0] || b->down[1])
 	{
-		//Con_Printf ("Keys down for button: '%c' '%c' '%c' (%d,%d,%d)!\n", b->down[0], b->down[1], c, b->down[0], b->down[1], c);
-		return;		// some other key is still holding it down
+		return;
 	}
 
 	if (!(b->state & 1))
-		return;		// still up (this should not happen)
+		return;
 
-	b->state &= ~1;		// now up
-	b->state |= 4; 		// impulse up
+	b->state &= ~1;
+	b->state |= 4;
 }
 
 /*
 ============
 HUD_Key_Event
-
-Return 1 to allow engine to process the key, otherwise, act on it as needed
 ============
 */
 int DLLEXPORT HUD_Key_Event( int down, int keynum, const char *pszCurrentBinding )
@@ -443,13 +415,11 @@ void IN_SpeedUp(void) {KeyUp(&in_speed);}
 void IN_StrafeDown(void) {KeyDown(&in_strafe);}
 void IN_StrafeUp(void) {KeyUp(&in_strafe);}
 
-// needs capture by hud/vgui also
 extern void __CmdFunc_InputPlayerSpecial(void);
 
 void IN_Attack2Down(void) 
 {
 	KeyDown(&in_attack2);
-
 	gHUD.m_Spectator.HandleButtonsDown( IN_ATTACK2 );
 }
 
@@ -464,14 +434,12 @@ void IN_JumpDown (void)
 {
 	KeyDown(&in_jump);
 	gHUD.m_Spectator.HandleButtonsDown( IN_JUMP );
-
 }
 void IN_JumpUp (void) {KeyUp(&in_jump);}
 void IN_DuckDown(void)
 {
 	KeyDown(&in_duck);
 	gHUD.m_Spectator.HandleButtonsDown( IN_DUCK );
-
 }
 void IN_DuckUp(void) {KeyUp(&in_duck);}
 void IN_ReloadDown(void) {KeyDown(&in_reload);}
@@ -493,7 +461,6 @@ void IN_AttackUp(void)
 	in_cancel = 0;
 }
 
-// Special handling
 void IN_Cancel(void)
 {
 	in_cancel = 1;
@@ -528,11 +495,6 @@ void IN_MLookUp (void)
 /*
 ===============
 CL_KeyState
-
-Returns 0.25 if a key was pressed and released during the frame,
-0.5 if it was pressed and held
-0 if held then released, and
-1.0 if held for the entire time
 ===============
 */
 float CL_KeyState (kbutton_t *key)
@@ -546,20 +508,16 @@ float CL_KeyState (kbutton_t *key)
 	
 	if ( impulsedown && !impulseup )
 	{
-		// pressed and held this frame?
 		val = down ? 0.5 : 0.0;
 	}
 
 	if ( impulseup && !impulsedown )
 	{
-		// released this frame?
-		// val = down ? 0.0 : 0.0;
 		val = 0.0;
 	}
 
 	if ( !impulsedown && !impulseup )
 	{
-		// held the entire frame?
 		val = down ? 1.0 : 0.0;
 	}
 
@@ -567,17 +525,14 @@ float CL_KeyState (kbutton_t *key)
 	{
 		if ( down )
 		{
-			// released and re-pressed this frame
 			val = 0.75;	
 		}
 		else
 		{
-			// pressed and released this frame
 			val = 0.25;	
 		}
 	}
 
-	// clear impulses
 	key->state &= 1;		
 	return val;
 }
@@ -585,8 +540,6 @@ float CL_KeyState (kbutton_t *key)
 /*
 ================
 CL_AdjustAngles
-
-Moves the local angle positions
 ================
 */
 void CL_AdjustAngles ( float frametime, float *viewangles )
@@ -611,7 +564,6 @@ void CL_AdjustAngles ( float frametime, float *viewangles )
 	}
 	if (in_klook.state & 1)
 	{
-		//V_StopPitchDrift ();
 		viewangles[PITCH] -= speed*cl_pitchspeed->value * CL_KeyState (&in_forward);
 		viewangles[PITCH] += speed*cl_pitchspeed->value * CL_KeyState (&in_back);
 	}
@@ -639,10 +591,6 @@ void CL_AdjustAngles ( float frametime, float *viewangles )
 /*
 ================
 CL_CreateMove
-
-Send the intended movement message to the server
-if active == 1 then we are 1) not playing back demos ( where our commands are ignored ) and
-2 ) we have finished signing on to server
 ================
 */
 void DLLEXPORT CL_CreateMove ( float frametime, struct usercmd_s *cmd, int active )
@@ -653,66 +601,64 @@ void DLLEXPORT CL_CreateMove ( float frametime, struct usercmd_s *cmd, int activ
 
 	if ( active )
 	{
-		//memset( viewangles, 0, sizeof( vec3_t ) );
-		//viewangles[ 0 ] = viewangles[ 1 ] = viewangles[ 2 ] = 0.0;
 		gEngfuncs.GetViewAngles( (float *)viewangles );
 
-		//aimbot space
-    // ====================== AIM ASSIST CORRIGIDO (Gruda na cabeça) ======================
-    if (cl_aim_assist && cl_aim_assist->value > 0.0f)
-    {
-    	cl_entity_t *target = NULL;
-    	float best_dist = 9999999.0f;
-    	cl_entity_t *local = gEngfuncs.GetLocalPlayer();
-    	if (!local) goto aim_end;
-    	Vector my_pos = local->curstate.origin;
-    	float head_offset = cl_aim_head_offset ? cl_aim_head_offset->value : 72.0f;
+		// ====================== AIM ASSIST ======================
+		if (cl_aim_assist && cl_aim_assist->value > 0.0f)
+		{
+			cl_entity_t *target = NULL;
+			float best_dist = 9999999.0f;
+			cl_entity_t *local = gEngfuncs.GetLocalPlayer();
+			if (local)
+			{
+				Vector my_pos = local->curstate.origin;
+				float head_offset = cl_aim_head_offset ? cl_aim_head_offset->value : 72.0f;
 
-    	for (int i = 1; i <= gEngfuncs.GetMaxClients(); i++)
-    	{
-    	    	cl_entity_t *pEnt = gEngfuncs.GetEntityByIndex(i);
-    	    	if (!pEnt || !pEnt->player || pEnt->index == local->index) continue;
-    	    	if (g_PlayerExtraInfo[i].teamnumber == g_iTeamNumber && g_iTeamNumber != 0) continue;
-    	    	if (g_PlayerExtraInfo[i].dead) continue;
-    	    	if (pEnt->curstate.health <= 0) continue;
+				for (int i = 1; i <= gEngfuncs.GetMaxClients(); i++)
+				{
+					cl_entity_t *pEnt = gEngfuncs.GetEntityByIndex(i);
+					if (!pEnt || !pEnt->player || pEnt->index == local->index) continue;
+					if (g_PlayerExtraInfo[i].teamnumber == g_iTeamNumber && g_iTeamNumber != 0) continue;
+					if (g_PlayerExtraInfo[i].dead) continue;
+					if (pEnt->curstate.health <= 0) continue;
 
-    	    	Vector head = pEnt->curstate.origin;
-    	    	head.z += head_offset;                   // usar mesmo offset para seleção
+					Vector head = pEnt->curstate.origin;
+					head.z += head_offset;
 
-    	    	float dist = (head - my_pos).Length();
-    	    	if (dist < best_dist && dist < 8192.0f)
-    	    	{
-    	    	    	best_dist = dist;
-    	    	    	target = pEnt;
-    	    	}
-    	}
+					float dist = (head - my_pos).Length();
+					if (dist < best_dist && dist < 8192.0f)
+					{
+						best_dist = dist;
+						target = pEnt;
+					}
+				}
 
-    	if (target)
-    	{
-    	    	Vector head = target->curstate.origin;
-    	    	head.z += head_offset;
+				if (target)
+				{
+					Vector head = target->curstate.origin;
+					head.z += head_offset;
 
-    	    	Vector delta = head - my_pos;
-    	    	float aim_angle[3];
-    	    	VectorAngles(delta, aim_angle);
+					Vector delta = head - my_pos;
+					float aim_angle[3];
+					VectorAngles(delta, aim_angle);
 
-    	    	// FOV check
-    	    	float dyaw = fabs(aim_angle[1] - viewangles[1]);
-    	    	if (dyaw > 180.0f) dyaw = 360.0f - dyaw;
-    	    	float dpitch = fabs(aim_angle[0] - viewangles[0]);
-    	    	float total_angle = sqrt(dyaw*dyaw + dpitch*dpitch);
+					float dyaw = fabs(aim_angle[1] - viewangles[1]);
+					if (dyaw > 180.0f) dyaw = 360.0f - dyaw;
+					float dpitch = fabs(aim_angle[0] - viewangles[0]);
+					float total_angle = sqrt(dyaw*dyaw + dpitch*dpitch);
 
-    	    	if (total_angle < (cl_aim_fov ? cl_aim_fov->value : 120.0f))
-    	    	{
-    	    	    	float smooth = cl_aim_smooth ? cl_aim_smooth->value : 0.35f;
-    	    	    	// smooth = 1.0 para grude instantâneo, menor para suave
-    	    	    	viewangles[0] = viewangles[0] * (1.0f - smooth) + aim_angle[0] * smooth;
-    	    	    	viewangles[1] = viewangles[1] * (1.0f - smooth) + aim_angle[1] * smooth;
-    	    	    	viewangles[2] = 0.0f;
-    	    	}
-    	}
-    }
-    aim_end: ;
+					if (total_angle < (cl_aim_fov ? cl_aim_fov->value : 120.0f))
+					{
+						float smooth = cl_aim_smooth ? cl_aim_smooth->value : 0.35f;
+						viewangles[0] = viewangles[0] * (1.0f - smooth) + aim_angle[0] * smooth;
+						viewangles[1] = viewangles[1] * (1.0f - smooth) + aim_angle[1] * smooth;
+						viewangles[2] = 0.0f;
+					}
+				}
+			}
+		}
+		// ====================== /AIM ASSIST ======================
+
 		CL_AdjustAngles ( frametime, viewangles );
 
 		memset (cmd, 0, sizeof(*cmd));
@@ -745,7 +691,6 @@ void DLLEXPORT CL_CreateMove ( float frametime, struct usercmd_s *cmd, int activ
 			}
 		}	
 
-		// adjust for speed key
 		if ( in_speed.state & 1 )
 		{
 			cmd->forwardmove *= cl_movespeedkey->value;
@@ -753,11 +698,9 @@ void DLLEXPORT CL_CreateMove ( float frametime, struct usercmd_s *cmd, int activ
 			cmd->upmove *= cl_movespeedkey->value;
 		}
 
-		// clip to maxspeed
 		spd = gEngfuncs.GetClientMaxspeed();
 		if ( spd != 0.0 )
 		{
-			// scale the 3 speeds so that the total velocity is not > cl.maxspeed
 			float fmov = sqrt( (cmd->forwardmove*cmd->forwardmove) + (cmd->sidemove*cmd->sidemove) + (cmd->upmove*cmd->upmove) );
 
 			if ( fmov > spd )
@@ -769,7 +712,6 @@ void DLLEXPORT CL_CreateMove ( float frametime, struct usercmd_s *cmd, int activ
 			}
 		}
 
-		// Allow mice and other controllers to add their inputs
 		IN_Move ( frametime, cmd );
 	}
 
@@ -778,17 +720,14 @@ void DLLEXPORT CL_CreateMove ( float frametime, struct usercmd_s *cmd, int activ
 
 	cmd->weaponselect = g_weaponselect;
 	g_weaponselect = 0;
-	//
-	// set button and flag bits
-	//
+
 	cmd->buttons = CL_ButtonBits( 1 );
 
-	// If they're in a modal dialog, ignore the attack button.
 	if ( GetClientVoice()->IsInSquelchMode() )
 		cmd->buttons &= ~IN_ATTACK;
 
-	// Using joystick?
-	if ( in_joystick->value )
+	// Usa in_joystick — protegido contra NULL apenas por seguranca
+	if ( in_joystick && in_joystick->value )
 	{
 		if ( cmd->forwardmove > 0 )
 		{
@@ -801,7 +740,6 @@ void DLLEXPORT CL_CreateMove ( float frametime, struct usercmd_s *cmd, int activ
 	}
 
 	gEngfuncs.GetViewAngles( (float *)viewangles );
-	// Set current view angles.
 
 	if ( CL_IsDead() )
 	{
@@ -812,15 +750,11 @@ void DLLEXPORT CL_CreateMove ( float frametime, struct usercmd_s *cmd, int activ
 		VectorCopy( viewangles, cmd->viewangles );
 		VectorCopy( viewangles, oldangles );
 	}
-
 }
 
 /*
 ============
 CL_ButtonBits
-
-Returns appropriate button info for keyboard and mouse state
-Set bResetState to 1 to clear old state info
 ============
 */
 int CL_ButtonBits( int bResetState )
@@ -905,7 +839,6 @@ int CL_ButtonBits( int bResetState )
 		bits |= IN_SCORE;
 	}
 
-	// Intermission? Show scoreboard too
 	if( gHUD.m_Scoreboard.ShouldDrawScoreboard( ))
 	{
 		bits |= IN_SCORE;
@@ -935,24 +868,20 @@ int CL_ButtonBits( int bResetState )
 /*
 ============
 CL_ResetButtonBits
-
 ============
 */
 void CL_ResetButtonBits( int bits )
 {
 	int bitsNew = CL_ButtonBits( 0 ) ^ bits;
 
-	// Has the attack button been changed
 	if ( bitsNew & IN_ATTACK )
 	{
-		// Was it pressed? or let go?
 		if ( bits & IN_ATTACK )
 		{
 			KeyDown( &in_attack );
 		}
 		else
 		{
-			// totally clear state
 			in_attack.state &= ~7;
 		}
 	}
@@ -1037,6 +966,11 @@ void InitInput (void)
 	m_forward			= gEngfuncs.pfnRegisterVariable ( "m_forward","1", FCVAR_ARCHIVE );
 	m_side				= gEngfuncs.pfnRegisterVariable ( "m_side","0.8", FCVAR_ARCHIVE );
 
+	// NOVO — registra in_joystick aqui, porque ele e definido neste arquivo.
+	// Sem isso, o linker nao encontra o simbolo quando input_sdl.cpp nao
+	// esta no build, e o cliente nao carrega.
+	in_joystick			= gEngfuncs.pfnRegisterVariable ( "joystick", "0", FCVAR_ARCHIVE );
+
 	// Initialize third person camera controls.
 	CAM_Init();
 	// Initialize inputs
@@ -1058,3 +992,31 @@ void Input_Shutdown (void)
 	KB_Shutdown();
 }
 
+/* ==========================================================================
+ *
+ *  Fallback stubs para o caso do backend de input (input_sdl.cpp /
+ *  input_xash3d.cpp) nao estar compilado no .so, ou de seus simbolos
+ *  estarem com visibility hidden.
+ *
+ *  São declarados "weak": se o backend real estiver linkado, a definicao
+ *  forte dele vence; se nao estiver, estes stubs entram em cena e o
+ *  dlopen() do motor nao falha com "undefined symbol".
+ *
+ *  O motor procura estes simbolos via dlsym() ao carregar o client.so.
+ *  Como sao opcionais, um stub vazio e suficiente.
+ * ========================================================================== */
+
+#if defined(__GNUC__) || defined(__clang__)
+#define XASH_WEAK __attribute__((weak))
+#else
+#define XASH_WEAK
+#endif
+
+XASH_WEAK void DLLEXPORT IN_MouseEvent( int mstate )       { (void)mstate; }
+XASH_WEAK void DLLEXPORT IN_ActivateMouse( void )          { }
+XASH_WEAK void DLLEXPORT IN_DeactivateMouse( void )        { }
+XASH_WEAK void DLLEXPORT IN_Accumulate( void )             { }
+XASH_WEAK void DLLEXPORT IN_ClearStates( void )            { }
+XASH_WEAK void DLLEXPORT IN_GetMousePos( int *mx, int *my ){ if (mx) *mx = 0; if (my) *my = 0; }
+XASH_WEAK void DLLEXPORT IN_ResetMouse( void )             { }
+XASH_WEAK void DLLEXPORT Force_CenterView_f( void )        { }

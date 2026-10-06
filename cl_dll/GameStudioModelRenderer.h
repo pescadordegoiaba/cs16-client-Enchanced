@@ -71,6 +71,9 @@ public:
 	virtual void StudioPlayerBlend(mstudioseqdesc_t *pseqdesc, int *pBlend, float *pPitch);
 	virtual void CalculateYawBlend(entity_state_t *pplayer);
 	virtual void CalculatePitchBlend(entity_state_t *pplayer);
+	// World-space hitboxes for the external overlay. Does not draw in the game.
+	void WriteCurrentHitboxes(void);
+	void ExportPlayerHitboxes(cl_entity_t *ent);
 
 private:
 	void SavePlayerState(entity_state_t *pplayer);
@@ -84,6 +87,8 @@ private:
 };
 
 extern CGameStudioModelRenderer g_StudioRenderer;
+void EspHitbox_BeginFrame(void);
+void EspHitbox_Flush(void);
 extern int g_rseq;
 extern int g_gaitseq;
 extern Vector g_clorg;

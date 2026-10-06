@@ -41,6 +41,12 @@
 #define strncasecmp _strnicmp
 #endif
 
+// AIM ASSIST BÁSICO
+cvar_t *cl_aim_assist      = nullptr;
+cvar_t *cl_aim_smooth      = nullptr;
+cvar_t *cl_aim_fov         = nullptr;
+cvar_t *cl_aim_head_offset = nullptr;
+
 cvar_t *cl_fog_r;
 cvar_t *cl_fog_g;
 cvar_t *cl_fog_b;
@@ -51,6 +57,7 @@ cvar_t *cl_player_outline = nullptr;   // silhouette outline on visible player m
 cvar_t *cl_hitbox_outline = nullptr;   // hitbox outlines on visible players for aiming reference (clean, not ugly)
 cvar_t *cl_hitbox_outline_head_only = nullptr; // only draw head hitbox (recommended for clean look)
 cvar_t *cl_hitbox_outline_max_dist = nullptr;     // max distance to draw hitboxes (performance)
+cvar_t *cl_esp = nullptr;   // 0 off, 1 all hitboxes through walls, 2 head only
 
 
 
@@ -328,11 +335,22 @@ void CHud :: Init( void )
 	zoom_sens_ratio = CVAR_CREATE( "zoom_sensitivity_ratio", "1.2", 0 );
 	cl_viewbob = CVAR_CREATE( "cl_viewbob", "1", FCVAR_ARCHIVE );
 
+	// AIM ASSIST BÁSICO
+cl_aim_assist      = gEngfuncs.pfnRegisterVariable( "cl_aim_assist",      "0",    FCVAR_ARCHIVE );
+cl_aim_smooth      = gEngfuncs.pfnRegisterVariable( "cl_aim_smooth",      "0.35", FCVAR_ARCHIVE );
+cl_aim_fov         = gEngfuncs.pfnRegisterVariable( "cl_aim_fov",         "120",  FCVAR_ARCHIVE );
+cl_aim_head_offset = gEngfuncs.pfnRegisterVariable( "cl_aim_head_offset", "72.0", FCVAR_ARCHIVE );
+
+// Clean visibility improvements ...
+cl_player_outline = gEngfuncs.pfnRegisterVariable("cl_player_outline", "0", FCVAR_ARCHIVE);
+// ... resto como já está
+
 	// Clean visibility improvements (player outline and hitbox outlines for visible models only)
 	cl_player_outline = gEngfuncs.pfnRegisterVariable("cl_player_outline", "0", FCVAR_ARCHIVE);
 	cl_hitbox_outline = gEngfuncs.pfnRegisterVariable("cl_hitbox_outline", "0", FCVAR_ARCHIVE);
 	cl_hitbox_outline_head_only = gEngfuncs.pfnRegisterVariable("cl_hitbox_outline_head_only", "1", FCVAR_ARCHIVE);
 	cl_hitbox_outline_max_dist = gEngfuncs.pfnRegisterVariable("cl_hitbox_outline_max_dist", "0", FCVAR_ARCHIVE);  // 0 = unlimited
+	cl_esp = gEngfuncs.pfnRegisterVariable("cl_esp", "0", FCVAR_ARCHIVE);
 
 	m_pShowHealth = CVAR_CREATE( "scoreboard_showhealth", "1", FCVAR_ARCHIVE );
 	m_pShowMoney = CVAR_CREATE( "scoreboard_showmoney", "1", FCVAR_ARCHIVE );

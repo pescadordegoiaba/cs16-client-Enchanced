@@ -51,6 +51,12 @@ extern cvar_t *cl_player_outline;  // clean visibility silhouette - only on visi
 extern cvar_t *cl_hitbox_outline;   // hitbox wireframe outlines for visible players (clean aiming reference)
 extern cvar_t *cl_hitbox_outline_head_only; // only head hitbox (much cleaner, recommended)
 extern cvar_t *cl_hitbox_outline_max_dist;   // max distance for hitbox drawing (perf)
+extern cvar_t *cl_esp;   // 1 = all hitboxes through walls, 2 = head only
+
+static int EspIsOffline(void)
+{
+	return gEngfuncs.pfnGetCvarFloat("esp_offline") > 0.0f;
+}
 
 #define ANIM_WALK_SEQUENCE 3
 #define ANIM_JUMP_SEQUENCE 6
@@ -61,6 +67,122 @@ extern cvar_t *cl_hitbox_outline_max_dist;   // max distance for hitbox drawing 
 #define ANIM_FIRST_EMOTION_SEQUENCE 198
 #define ANIM_LAST_EMOTION_SEQUENCE 207
 #define STUDIO_HITGROUP_HEAD 1
+
+#include <stdint.h>
+#include <sys/mman.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <time.h>
+
+#define ESP_HB_MAGIC 0x58424831u
+#define ESP_HB_MAX   384
+#define ESP_HB_PATH  "/tmp/cs16_hitbox.bin"
+
+struct esp_hb_t
+{
+	float c[8][3];
+	int32_t group;
+	int32_t player;
+};
+
+struct esp_hb_frame_t
+{
+	uint32_t magic;
+	uint32_t seq;
+	uint32_t time_ms;
+	int32_t count;
+	esp_hb_t box[ESP_HB_MAX];
+};
+
+static esp_hb_frame_t *g_espHb;
+static int g_espHbFd = -1;
+static uint32_t g_espSeen;
+static int g_espCount;
+static esp_hb_t g_espBoxes[ESP_HB_MAX];
+
+static void EspHitbox_Open(void)
+{
+	if (g_espHb)
+		return;
+
+	g_espHbFd = open(ESP_HB_PATH, O_RDWR | O_CREAT, 0600);
+	if (g_espHbFd < 0)
+		return;
+	if (ftruncate(g_espHbFd, sizeof(*g_espHb)) < 0)
+		return;
+
+	void *map = mmap(NULL, sizeof(*g_espHb), PROT_READ | PROT_WRITE, MAP_SHARED, g_espHbFd, 0);
+	if (map == MAP_FAILED)
+		return;
+
+	g_espHb = (esp_hb_frame_t *)map;
+	memset(g_espHb, 0, sizeof(*g_espHb));
+	g_espHb->magic = ESP_HB_MAGIC;
+}
+
+void EspHitbox_BeginFrame(void)
+{
+	g_espSeen = 0;
+	g_espCount = 0;
+}
+
+void EspHitbox_Flush(void)
+{
+	int i, maxclients;
+	cl_entity_t *local;
+
+	EspHitbox_Open();
+
+	local = gEngfuncs.GetLocalPlayer();
+	maxclients = gEngfuncs.GetMaxClients();
+	if (maxclients > 128)
+		maxclients = 128;
+
+	if (!EspIsOffline())
+		g_espCount = 0;
+	else
+	{
+		for (i = 1; i <= maxclients; i++)
+		{
+			cl_entity_t *ent;
+
+			if (g_espSeen & (1u << i))
+				continue;
+			if (local && local->index == i)
+				continue;
+
+			ent = gEngfuncs.GetEntityByIndex(i);
+			if (!ent || !ent->player || !ent->model)
+				continue;
+
+			g_StudioRenderer.ExportPlayerHitboxes(ent);
+		}
+	}
+
+	if (!g_espHb)
+		return;
+
+	struct timespec ts;
+	uint32_t odd;
+	esp_hb_frame_t localFrame;
+
+	memset(&localFrame, 0, sizeof(localFrame));
+	localFrame.magic = ESP_HB_MAGIC;
+	localFrame.count = g_espCount;
+	if (g_espCount > 0)
+		memcpy(localFrame.box, g_espBoxes, sizeof(esp_hb_t) * g_espCount);
+
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	localFrame.time_ms = (uint32_t)(ts.tv_sec * 1000u + ts.tv_nsec / 1000000u);
+
+	odd = (g_espHb->seq + 1u) | 1u;
+	g_espHb->seq = odd;
+	__sync_synchronize();
+	memcpy((char *)g_espHb + 8, (char *)&localFrame + 8, sizeof(localFrame) - 8);
+	__sync_synchronize();
+	g_espHb->seq = odd + 1u;
+}
 
 CGameStudioModelRenderer g_StudioRenderer;
 
@@ -848,6 +970,128 @@ bool WeaponHasAttachments(entity_state_t *pplayer)
 	return (modelheader->numattachments != 0);
 }
 
+void CGameStudioModelRenderer::WriteCurrentHitboxes(void)
+{
+	int index, i, j;
+	studiohdr_t *hdr;
+	mstudiobbox_t *hit;
+
+	if (!EspIsOffline())
+		return;
+	if (!m_pCurrentEntity || !m_pStudioHeader || !m_pbonetransform)
+		return;
+
+	index = m_pCurrentEntity->index;
+	if (index <= 0 || index > 31)
+		return;
+	if (g_espSeen & (1u << index))
+		return;
+
+	hdr = m_pStudioHeader;
+	if (hdr->numhitboxes <= 0)
+		return;
+
+	hit = (mstudiobbox_t *)((byte *)hdr + hdr->hitboxindex);
+	for (i = 0; i < hdr->numhitboxes && g_espCount < ESP_HB_MAX; i++)
+	{
+		int bone = hit[i].bone;
+		float mins[3], maxs[3];
+		float src[8][3];
+		float (*mat)[4];
+		esp_hb_t *out;
+
+		if (bone < 0 || bone >= MAXSTUDIOBONES)
+			continue;
+
+		mins[0] = hit[i].bbmin[0];
+		mins[1] = hit[i].bbmin[1];
+		mins[2] = hit[i].bbmin[2];
+		maxs[0] = hit[i].bbmax[0];
+		maxs[1] = hit[i].bbmax[1];
+		maxs[2] = hit[i].bbmax[2];
+
+		src[0][0] = mins[0]; src[0][1] = mins[1]; src[0][2] = mins[2];
+		src[1][0] = maxs[0]; src[1][1] = mins[1]; src[1][2] = mins[2];
+		src[2][0] = maxs[0]; src[2][1] = maxs[1]; src[2][2] = mins[2];
+		src[3][0] = mins[0]; src[3][1] = maxs[1]; src[3][2] = mins[2];
+		src[4][0] = mins[0]; src[4][1] = mins[1]; src[4][2] = maxs[2];
+		src[5][0] = maxs[0]; src[5][1] = mins[1]; src[5][2] = maxs[2];
+		src[6][0] = maxs[0]; src[6][1] = maxs[1]; src[6][2] = maxs[2];
+		src[7][0] = mins[0]; src[7][1] = maxs[1]; src[7][2] = maxs[2];
+
+		mat = (*m_pbonetransform)[bone];
+		out = &g_espBoxes[g_espCount];
+		for (j = 0; j < 8; j++)
+		{
+			out->c[j][0] = src[j][0] * mat[0][0] + src[j][1] * mat[0][1] + src[j][2] * mat[0][2] + mat[0][3];
+			out->c[j][1] = src[j][0] * mat[1][0] + src[j][1] * mat[1][1] + src[j][2] * mat[1][2] + mat[1][3];
+			out->c[j][2] = src[j][0] * mat[2][0] + src[j][1] * mat[2][1] + src[j][2] * mat[2][2] + mat[2][3];
+		}
+		out->group = hit[i].group;
+		out->player = index;
+		g_espCount++;
+	}
+
+	g_espSeen |= 1u << index;
+}
+
+void CGameStudioModelRenderer::ExportPlayerHitboxes(cl_entity_t *ent)
+{
+	cl_entity_t *saved;
+
+	if (!ent || !ent->player || !ent->model)
+		return;
+	if (ent->index <= 0 || ent->index > 31)
+		return;
+	if (g_espSeen & (1u << ent->index))
+		return;
+
+	saved = m_pCurrentEntity;
+	m_pCurrentEntity = ent;
+
+	IEngineStudio.GetTimes(&m_nFrameCount, &m_clTime, &m_clOldTime);
+	m_nPlayerIndex = ent->curstate.number - 1;
+	if (m_nPlayerIndex < 0 || m_nPlayerIndex >= gEngfuncs.GetMaxClients())
+	{
+		m_pCurrentEntity = saved;
+		return;
+	}
+
+	m_pRenderModel = IEngineStudio.SetupPlayerModel(m_nPlayerIndex);
+	if (!m_pRenderModel)
+		m_pRenderModel = ent->model;
+	if (!m_pRenderModel)
+	{
+		m_pCurrentEntity = saved;
+		return;
+	}
+
+	m_pStudioHeader = (studiohdr_t *)IEngineStudio.Mod_Extradata(m_pRenderModel);
+	if (!m_pStudioHeader)
+	{
+		m_pCurrentEntity = saved;
+		return;
+	}
+
+	IEngineStudio.StudioSetHeader(m_pStudioHeader);
+	IEngineStudio.SetRenderModel(m_pRenderModel);
+
+	if (m_pCurrentEntity->curstate.sequence >= m_pStudioHeader->numseq)
+		m_pCurrentEntity->curstate.sequence = 0;
+
+	m_pPlayerInfo = IEngineStudio.PlayerInfo(m_nPlayerIndex);
+	if (m_pPlayerInfo)
+		m_pPlayerInfo->gaitsequence = ent->curstate.gaitsequence;
+
+	StudioSetUpTransform(0);
+	if (m_pPlayerInfo)
+		StudioSetupBones();
+	m_pPlayerInfo = NULL;
+
+	WriteCurrentHitboxes();
+	m_pCurrentEntity = saved;
+}
+
 int CGameStudioModelRenderer::_StudioDrawPlayer(int flags, entity_state_t *pplayer)
 {
 	m_pCurrentEntity = IEngineStudio.GetCurrentEntity();
@@ -967,6 +1211,7 @@ int CGameStudioModelRenderer::_StudioDrawPlayer(int flags, entity_state_t *pplay
 
 	StudioSetupBones();
 	StudioSaveBones();
+	WriteCurrentHitboxes();
 
 	m_pPlayerInfo->renderframe = m_nFrameCount;
 	m_pPlayerInfo = NULL;
@@ -1061,6 +1306,84 @@ int CGameStudioModelRenderer::_StudioDrawPlayer(int flags, entity_state_t *pplay
 		IEngineStudio.StudioSetRemapColors(m_nTopColor, m_nBottomColor);
 
 		StudioRenderModel(dir);   // normal textured render on top
+
+		// Native ESP: same bones as the model, drawn without the depth test so the
+		// wireframe stays visible through walls. Offline listen-server only.
+		if (EspIsOffline() && cl_esp && cl_esp->value > 0.0f)
+		{
+			mstudiobbox_t *pHitbox = (mstudiobbox_t *)((byte *)m_pStudioHeader + m_pStudioHeader->hitboxindex);
+			bool headOnly = cl_esp->value >= 2.0f;
+			GLboolean depthWas = glIsEnabled(GL_DEPTH_TEST);
+
+			gEngfuncs.pTriAPI->RenderMode(kRenderNormal);
+			glPushAttrib(GL_ENABLE_BIT | GL_LINE_BIT | GL_CURRENT_BIT);
+			glDisable(GL_DEPTH_TEST);
+			glDepthMask(GL_FALSE);
+
+			for (int i = 0; i < m_pStudioHeader->numhitboxes; i++)
+			{
+				bool isHead = (pHitbox[i].group == STUDIO_HITGROUP_HEAD);
+				if (headOnly && !isHead)
+					continue;
+
+				int bone = pHitbox[i].bone;
+				if (bone < 0 || bone >= MAXSTUDIOBONES)
+					continue;
+
+				float mins[3] = { pHitbox[i].bbmin[0], pHitbox[i].bbmin[1], pHitbox[i].bbmin[2] };
+				float maxs[3] = { pHitbox[i].bbmax[0], pHitbox[i].bbmax[1], pHitbox[i].bbmax[2] };
+				Vector corners[8] = {
+					{mins[0], mins[1], mins[2]},
+					{maxs[0], mins[1], mins[2]},
+					{maxs[0], maxs[1], mins[2]},
+					{mins[0], maxs[1], mins[2]},
+					{mins[0], mins[1], maxs[2]},
+					{maxs[0], mins[1], maxs[2]},
+					{maxs[0], maxs[1], maxs[2]},
+					{mins[0], maxs[1], maxs[2]}
+				};
+
+				float (*mat)[4] = (*m_pbonetransform)[bone];
+				for (int j = 0; j < 8; j++)
+				{
+					Vector src = corners[j];
+					corners[j][0] = src[0]*mat[0][0] + src[1]*mat[0][1] + src[2]*mat[0][2] + mat[0][3];
+					corners[j][1] = src[0]*mat[1][0] + src[1]*mat[1][1] + src[2]*mat[1][2] + mat[1][3];
+					corners[j][2] = src[0]*mat[2][0] + src[1]*mat[2][1] + src[2]*mat[2][2] + mat[2][3];
+				}
+
+				glLineWidth(isHead ? 2.0f : 1.0f);
+				gEngfuncs.pTriAPI->Begin(TRI_LINES);
+				if (isHead)
+					gEngfuncs.pTriAPI->Color4ub(80, 255, 255, 255);
+				else
+					gEngfuncs.pTriAPI->Color4ub(255, 255, 255, 220);
+				DrawStudioHitboxEdges(corners);
+				gEngfuncs.pTriAPI->End();
+
+				if (isHead)
+				{
+					Vector mid(0, 0, 0);
+					for (int j = 0; j < 8; j++)
+						mid = mid + corners[j];
+					mid = mid * 0.125f;
+					glPointSize(6.0f);
+					gEngfuncs.pTriAPI->Begin(TRI_POINTS);
+					gEngfuncs.pTriAPI->Color4ub(80, 255, 255, 255);
+					gEngfuncs.pTriAPI->Vertex3fv(mid);
+					gEngfuncs.pTriAPI->End();
+					glPointSize(1.0f);
+				}
+			}
+
+			glDepthMask(GL_TRUE);
+			if (depthWas)
+				glEnable(GL_DEPTH_TEST);
+			else
+				glDisable(GL_DEPTH_TEST);
+			glPopAttrib();
+			gEngfuncs.pTriAPI->RenderMode(kRenderNormal);
+		}
 
 		// Hitbox outlines (wireframe for aim practice) - clean, head-only by default
 		if (cl_hitbox_outline && cl_hitbox_outline->value > 0.0f && isOtherPlayer)
