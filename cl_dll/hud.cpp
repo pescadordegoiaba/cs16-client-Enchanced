@@ -21,6 +21,7 @@
 #include <new>
 
 #include "hud.h"
+#include "aimbot.h"
 #include "cl_util.h"
 #include <string.h>
 #include <stdio.h>
@@ -340,6 +341,7 @@ cl_aim_assist      = gEngfuncs.pfnRegisterVariable( "cl_aim_assist",      "0",  
 cl_aim_smooth      = gEngfuncs.pfnRegisterVariable( "cl_aim_smooth",      "0.35", FCVAR_ARCHIVE );
 cl_aim_fov         = gEngfuncs.pfnRegisterVariable( "cl_aim_fov",         "120",  FCVAR_ARCHIVE );
 cl_aim_head_offset = gEngfuncs.pfnRegisterVariable( "cl_aim_head_offset", "72.0", FCVAR_ARCHIVE );
+	Aimbot_Init();
 
 // Clean visibility improvements ...
 cl_player_outline = gEngfuncs.pfnRegisterVariable("cl_player_outline", "0", FCVAR_ARCHIVE);

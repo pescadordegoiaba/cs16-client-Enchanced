@@ -22,15 +22,10 @@
 
 #include "vgui_parser.h"
 #include "com_weapons.h"
+#include "aimbot.h"
 
 extern int g_weaponselect;
 extern cl_enginefunc_t gEngfuncs;
-
-// AIM ASSIST BÁSICO
-extern cvar_t *cl_aim_assist;
-extern cvar_t *cl_aim_smooth;
-extern cvar_t *cl_aim_fov;
-extern cvar_t *cl_aim_head_offset;
 
 // Defined in pm_math.c
 float anglemod( float a );
@@ -341,7 +336,8 @@ HUD_Key_Event
 */
 int DLLEXPORT HUD_Key_Event( int down, int keynum, const char *pszCurrentBinding )
 {
-	return 1;
+	(void)pszCurrentBinding;
+	return Aimbot_Key( down, keynum );
 }
 
 void IN_BreakDown( void ) { KeyDown( &in_break );}
@@ -603,62 +599,6 @@ void DLLEXPORT CL_CreateMove ( float frametime, struct usercmd_s *cmd, int activ
 	{
 		gEngfuncs.GetViewAngles( (float *)viewangles );
 
-		// ====================== AIM ASSIST ======================
-		if (cl_aim_assist && cl_aim_assist->value > 0.0f)
-		{
-			cl_entity_t *target = NULL;
-			float best_dist = 9999999.0f;
-			cl_entity_t *local = gEngfuncs.GetLocalPlayer();
-			if (local)
-			{
-				Vector my_pos = local->curstate.origin;
-				float head_offset = cl_aim_head_offset ? cl_aim_head_offset->value : 72.0f;
-
-				for (int i = 1; i <= gEngfuncs.GetMaxClients(); i++)
-				{
-					cl_entity_t *pEnt = gEngfuncs.GetEntityByIndex(i);
-					if (!pEnt || !pEnt->player || pEnt->index == local->index) continue;
-					if (g_PlayerExtraInfo[i].teamnumber == g_iTeamNumber && g_iTeamNumber != 0) continue;
-					if (g_PlayerExtraInfo[i].dead) continue;
-					if (pEnt->curstate.health <= 0) continue;
-
-					Vector head = pEnt->curstate.origin;
-					head.z += head_offset;
-
-					float dist = (head - my_pos).Length();
-					if (dist < best_dist && dist < 8192.0f)
-					{
-						best_dist = dist;
-						target = pEnt;
-					}
-				}
-
-				if (target)
-				{
-					Vector head = target->curstate.origin;
-					head.z += head_offset;
-
-					Vector delta = head - my_pos;
-					float aim_angle[3];
-					VectorAngles(delta, aim_angle);
-
-					float dyaw = fabs(aim_angle[1] - viewangles[1]);
-					if (dyaw > 180.0f) dyaw = 360.0f - dyaw;
-					float dpitch = fabs(aim_angle[0] - viewangles[0]);
-					float total_angle = sqrt(dyaw*dyaw + dpitch*dpitch);
-
-					if (total_angle < (cl_aim_fov ? cl_aim_fov->value : 120.0f))
-					{
-						float smooth = cl_aim_smooth ? cl_aim_smooth->value : 0.35f;
-						viewangles[0] = viewangles[0] * (1.0f - smooth) + aim_angle[0] * smooth;
-						viewangles[1] = viewangles[1] * (1.0f - smooth) + aim_angle[1] * smooth;
-						viewangles[2] = 0.0f;
-					}
-				}
-			}
-		}
-		// ====================== /AIM ASSIST ======================
-
 		CL_AdjustAngles ( frametime, viewangles );
 
 		memset (cmd, 0, sizeof(*cmd));
@@ -747,6 +687,8 @@ void DLLEXPORT CL_CreateMove ( float frametime, struct usercmd_s *cmd, int activ
 	}
 	else
 	{
+		if ( active && Aimbot_Apply( viewangles, cmd->buttons ))
+			gEngfuncs.SetViewAngles( (float *)viewangles );
 		VectorCopy( viewangles, cmd->viewangles );
 		VectorCopy( viewangles, oldangles );
 	}

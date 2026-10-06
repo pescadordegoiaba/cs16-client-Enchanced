@@ -17,6 +17,7 @@
 // for this code.
 #include <assert.h>
 #include "hud.h"
+#include "aimbot.h"
 #include "cl_util.h"
 #include "const.h"
 #include "com_model.h"
@@ -164,6 +165,35 @@ void EspHitbox_Flush(void)
 
 			g_StudioRenderer.ExportPlayerHitboxes(ent);
 		}
+	}
+
+	{
+		aim_box_t snap[ESP_HB_MAX];
+		int n = 0;
+		int b;
+
+		for (b = 0; b < g_espCount && n < ESP_HB_MAX; b++)
+		{
+			int k;
+			float o[3];
+
+			if (g_espBoxes[b].player <= 0)
+				continue;
+			o[0] = o[1] = o[2] = 0.f;
+			for (k = 0; k < 8; k++)
+			{
+				o[0] += g_espBoxes[b].c[k][0];
+				o[1] += g_espBoxes[b].c[k][1];
+				o[2] += g_espBoxes[b].c[k][2];
+			}
+			snap[n].player = g_espBoxes[b].player;
+			snap[n].group = g_espBoxes[b].group;
+			snap[n].origin[0] = o[0] * 0.125f;
+			snap[n].origin[1] = o[1] * 0.125f;
+			snap[n].origin[2] = o[2] * 0.125f;
+			n++;
+		}
+		Aimbot_SetBoxes(snap, n);
 	}
 
 	if (!g_espHb)
