@@ -25,10 +25,23 @@ struct Item
 	int slot;
 };
 
+enum { KIND_TEXT = 1000 };
+
 static int g_kind = 0;
 static int g_page = PAGE_ROOT;
 static int g_bits = 0;
 static int g_panel = 0;
+static char g_text[2048];
+
+static const char *g_radio_a[] = {
+	"Cover Me", "You Take the Point", "Hold This Position", "Regroup Team", "Follow Me", "Taking Fire"
+};
+static const char *g_radio_b[] = {
+	"Go Go Go", "Team, Fall Back", "Stick Together Team", "Get in Position and Wait", "Storm the Front", "Report In Team"
+};
+static const char *g_radio_c[] = {
+	"Affirmative", "Enemy Spotted", "Need Backup", "Sector Clear", "In Position", "Reporting In", "Get out of there!", "Negative", "Enemy Down"
+};
 
 static int IsCT( void )
 {
@@ -338,9 +351,103 @@ static void DrawClass( int ct )
 	EndHudMenu();
 }
 
+static void MenuSelect( int slot )
+{
+	char cmd[32];
+	snprintf( cmd, sizeof( cmd ), "menuselect %d\n", slot == 0 ? 10 : slot );
+	Buy( cmd );
+	g_kind = 0;
+	g_page = PAGE_ROOT;
+	ImGui_SetMenuOpen( 0 );
+}
+
+static void DrawLines( const char *title, const char **lines, int count )
+{
+	int i;
+	if( !BeginHudMenu( "##lines", title ) )
+	{
+		EndHudMenu();
+		return;
+	}
+	for( i = 0; i < count; ++i )
+	{
+		if( !SlotOn( i + 1 ) )
+			continue;
+		if( HudSlot( i + 1, lines[i], 0, true ) )
+			MenuSelect( i + 1 );
+	}
+	if( HudSlot( 0, "Exit", 0, true ) )
+		MenuSelect( 0 );
+	EndHudMenu();
+}
+
+static void DrawTextMenu( void )
+{
+	char line[256];
+	const char *p = g_text;
+	int shown = 0;
+
+	if( !BeginHudMenu( "##text", "Menu" ) )
+	{
+		EndHudMenu();
+		return;
+	}
+	while( *p )
+	{
+		int n = 0;
+		int slot = -1;
+		while( p[n] && p[n] != '\n' && n < (int)sizeof( line ) - 1 )
+		{
+			line[n] = p[n];
+			n++;
+		}
+		line[n] = 0;
+		if( line[0] >= '0' && line[0] <= '9' )
+			slot = line[0] - '0';
+		if( line[0] )
+		{
+			if( slot >= 0 )
+			{
+				if( HudSlot( slot, line + ( line[1] == '.' ? 2 : 1 ), 0, SlotOn( slot == 0 ? 10 : slot ) || g_bits == 0 ) )
+					MenuSelect( slot );
+			}
+			else
+				ImGui::TextUnformatted( line );
+			shown++;
+		}
+		p += n;
+		if( *p == '\n' )
+			p++;
+	}
+	if( !shown )
+		ImGui::TextUnformatted( g_text );
+	EndHudMenu();
+}
+
 static void DrawPanel( void * )
 {
-	if( g_kind == MENU_BUY || ( g_kind >= MENU_BUY_PISTOL && g_kind <= MENU_BUY_ITEM ) )
+	if( g_kind == KIND_TEXT )
+		DrawTextMenu();
+	else if( g_kind == MENU_RADIOA )
+		DrawLines( "Radio Commands", g_radio_a, 6 );
+	else if( g_kind == MENU_RADIOB )
+		DrawLines( "Radio Commands", g_radio_b, 6 );
+	else if( g_kind == MENU_RADIOC )
+		DrawLines( "Radio Commands", g_radio_c, 9 );
+	else if( g_kind == MENU_RADIOSELECTOR )
+	{
+		if( BeginHudMenu( "##radiosel", "Radio" ) )
+		{
+			if( HudSlot( 1, "Radio A", 0, true ) ) Buy( "radio1" );
+			if( HudSlot( 2, "Radio B", 0, true ) ) Buy( "radio2" );
+			if( HudSlot( 3, "Radio C", 0, true ) ) Buy( "radio3" );
+			if( HudSlot( 0, "Exit", 0, true ) ) { g_kind = 0; ImGui_SetMenuOpen( 0 ); }
+			EndHudMenu();
+		}
+		else
+			EndHudMenu();
+	}
+	else if( g_kind == MENU_BUY || ( g_kind >= MENU_BUY_PISTOL && g_kind <= MENU_BUY_ITEM ) )
 		DrawBuy();
 	else if( g_kind == MENU_TEAM )
 		DrawTeam();
@@ -375,6 +482,17 @@ void ImGuiMenu_Open( int menuType, int bits )
 	g_kind = menuType;
 	g_bits = bits;
 	g_page = PageForMenu( menuType );
+	g_text[0] = 0;
+	ImGuiMenu_Init();
+	ImGui_SetMenuOpen( 1 );
+}
+
+void ImGuiMenu_OpenText( const char *text, int bits )
+{
+	g_kind = KIND_TEXT;
+	g_bits = bits;
+	g_page = PAGE_ROOT;
+	snprintf( g_text, sizeof( g_text ), "%s", text ? text : "" );
 	ImGuiMenu_Init();
 	ImGui_SetMenuOpen( 1 );
 }
@@ -492,6 +610,20 @@ int ImGuiMenu_OnKey( int down, int keynum )
 	int slot = -1;
 	if( !g_kind || !down )
 		return 0;
+	if( g_kind == KIND_TEXT || g_kind == MENU_RADIOA || g_kind == MENU_RADIOB || g_kind == MENU_RADIOC )
+	{
+		if( keynum == K_ESCAPE || keynum == '0' )
+		{
+			MenuSelect( 0 );
+			return 1;
+		}
+		if( keynum >= '1' && keynum <= '9' )
+		{
+			MenuSelect( keynum - '0' );
+			return 1;
+		}
+		return 0;
+	}
 	if( keynum == K_ESCAPE || keynum == '0' )
 	{
 		if( g_kind == MENU_BUY || ( g_kind >= MENU_BUY_PISTOL && g_kind <= MENU_BUY_ITEM ) )

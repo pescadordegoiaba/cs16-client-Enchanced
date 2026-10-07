@@ -8,6 +8,7 @@
 #include "keydefs.h"
 #include "imgui_host.h"
 #include "imgui_menu.h"
+#include "imgui_scoreboard.h"
 
 extern int g_iVisibleMouse;
 
@@ -339,7 +340,7 @@ void ImGui_VidInit( void )
 
 void ImGui_Frame( void )
 {
-	if( !g_open && !g_menu_open )
+	if( !g_open && !g_menu_open && !ImGuiScore_Active() )
 	{
 		SyncCursorCvar();
 		return;

@@ -167,6 +167,9 @@ int CHudScoreboard :: Draw( float flTime )
 	if( !ShouldDrawScoreboard( ))
 		return 1;
 
+	GetAllPlayersInfo();
+	return 1;
+
 	if( !m_bForceDraw )
 	{
 		xstart     = 0.125f * ScreenWidth;

@@ -3,6 +3,7 @@
 
 void ImGuiMenu_Init( void );
 void ImGuiMenu_Open( int menuType, int bits );
+void ImGuiMenu_OpenText( const char *text, int bits );
 void ImGuiMenu_Close( void );
 int  ImGuiMenu_IsOpen( void );
 // 1 = tecla consumida

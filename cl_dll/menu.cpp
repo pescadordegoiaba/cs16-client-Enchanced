@@ -219,7 +219,8 @@ int CHudMenu :: MsgFunc_ShowMenu( const char *pszName, int iSize, void *pbuf )
 	}
 
 	m_fMenuDisplayed = 1;
-	m_iFlags |= HUD_DRAW;
+	m_iFlags &= ~HUD_DRAW;
+	ImGuiMenu_OpenText( g_szMenuString, m_bitsValidSlots );
 
 	m_fWaitingForMore = NeedMore;
 
@@ -265,6 +266,7 @@ void CHudMenu::UserCmd_OldStyleMenuClose()
 {
 	m_fMenuDisplayed = 0; // no valid slots means that the menu should be turned off
 	m_iFlags &= ~HUD_DRAW;
+	ImGuiMenu_Close();
 
 	Touch_CloseMenu();
 }
@@ -293,17 +295,13 @@ void CHudMenu::ShowVGUIMenu( int menuType )
 		m_iFlags &= ~HUD_DRAW;
 		return;
 	case MENU_RADIOA:
-		szCmd = "exec touch/radioa.cfg";
-		break;
 	case MENU_RADIOB:
-		szCmd = "exec touch/radiob.cfg";
-		break;
 	case MENU_RADIOC:
-		szCmd = "exec touch/radioc.cfg";
-		break;
 	case MENU_RADIOSELECTOR:
-		szCmd = "exec touch/radioselector.cfg";
-		break;
+		ImGuiMenu_Open( menuType, m_bitsValidSlots );
+		m_fMenuDisplayed = 0;
+		m_iFlags &= ~HUD_DRAW;
+		return;
 	case MENU_BUY_CSDM:
 		szCmd = "exec touch/custom/dm_menu.cfg";
 		break;

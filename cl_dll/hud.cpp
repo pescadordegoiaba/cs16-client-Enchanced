@@ -41,6 +41,7 @@
 #include "hud_layout.h"
 #include "imgui_host.h"
 #include "imgui_menu.h"
+#include "imgui_scoreboard.h"
 #if _WIN32
 #define strncasecmp _strnicmp
 #endif
@@ -364,6 +365,7 @@ cl_player_outline = gEngfuncs.pfnRegisterVariable("cl_player_outline", "0", FCVA
 	m_pCvarColor = CVAR_CREATE( "hud_color", "255 160 0", FCVAR_ARCHIVE );
 	HudLayout_Init();
 	ImGuiMenu_Init();
+	ImGuiScore_Init();
 
 	if ( gEngfuncs.pfnGetCvarFloat( "developer" ) > 0.0f )
 	{
